@@ -1,0 +1,11 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <!-- CA1707 (sin guiones bajos) se desactiva en tests: el estilo
+         Metodo_Condicion_ResultadoEsperado es la convención idiomática de este proyecto. -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+</Project>

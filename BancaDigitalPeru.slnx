@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BancaDigitalPeru.Api/BancaDigitalPeru.Api.csproj" />
+    <Project Path="src/BancaDigitalPeru.Application/BancaDigitalPeru.Application.csproj" />
+    <Project Path="src/BancaDigitalPeru.Domain/BancaDigitalPeru.Domain.csproj" />
+    <Project Path="src/BancaDigitalPeru.Infrastructure/BancaDigitalPeru.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BancaDigitalPeru.Application.UnitTests/BancaDigitalPeru.Application.UnitTests.csproj" />
+    <Project Path="tests/BancaDigitalPeru.Domain.UnitTests/BancaDigitalPeru.Domain.UnitTests.csproj" />
+    <Project Path="tests/BancaDigitalPeru.IntegrationTests/BancaDigitalPeru.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,12 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: banca-digital-pe-db
+    environment:
+      POSTGRES_DB: banca_digital_pe
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - .pgdata:/var/lib/postgresql/data
