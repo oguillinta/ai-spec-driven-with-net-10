@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-20
 
-**Status**: Draft
+**Status**: Approved
 
 **Input**: User description: "Consulta de productos bancarios del cliente: el cliente debe poder
 listar y consultar el detalle de sus cuentas de ahorro y de sus tarjetas de débito, viendo saldo
@@ -246,8 +246,11 @@ cuenta o tarjeta perteneciente al Cliente B, incluso conociendo su identificador
   aparecen enmascarados, sin exponer el número completo en ningún caso.
 - **SC-004**: El 100% de los saldos e importes se presentan en Soles (PEN) con exactamente dos
   posiciones decimales.
-- **SC-005**: Un cliente puede identificar, desde el listado de cuentas o tarjetas, el estado
-  (ACTIVA/BLOQUEADA) de cada producto en menos de 5 segundos de lectura, sin pasos adicionales.
+- **SC-005**: El campo `status` (ACTIVA/BLOQUEADA) está presente en el 100% de las respuestas de
+  listado y detalle de cuentas y tarjetas, sin requerir una consulta adicional para conocerlo.
+  *(La verificación de que un cliente humano lo identifica en menos de 5 segundos corresponde a
+  una futura feature de interfaz de usuario que consuma esta API; queda fuera del alcance de
+  `001`.)*
 - **SC-006**: Las cuentas y tarjetas ficticias registradas permanecen disponibles e inalteradas
   (mismos saldos, estados y asociaciones) tras cerrar y volver a utilizar la aplicación.
 
