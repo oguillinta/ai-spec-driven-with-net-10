@@ -1,0 +1,353 @@
+openapi: 3.1.0
+
+info:
+  title: Banca Digital Perú - Consulta de Productos Bancarios
+  version: "1.0.0"
+  description: >
+    Contrato de solo lectura para que el cliente actual (de demostración, sin autenticación)
+    consulte sus cuentas de ahorro y tarjetas de débito. Proyecto académico: todos los datos son
+    ficticios y no representan información financiera ni personal real.
+    Corresponde a la feature `001-consulta-productos-bancarios`.
+  contact:
+    name: Banca Digital Perú (proyecto académico)
+
+servers:
+  - url: /api/v1
+    description: Prefijo de versión v1 de la API. Cambios incompatibles se publicarán como /api/v2.
+
+tags:
+  - name: Accounts
+    description: Consulta de cuentas de ahorro del cliente actual.
+  - name: DebitCards
+    description: Consulta de tarjetas de débito del cliente actual.
+
+paths:
+  /accounts:
+    get:
+      tags: [Accounts]
+      operationId: listMyAccounts
+      summary: Listar las cuentas de ahorro del cliente actual
+      description: >
+        Devuelve todas las cuentas de ahorro pertenecientes al cliente actual, incluyendo las que
+        están BLOQUEADAS. No requiere parámetros: el cliente se resuelve en el servidor (spec
+        FR-001, FR-015).
+      responses:
+        "200":
+          description: Lista de cuentas del cliente actual (puede estar vacía).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountSummary"
+              examples:
+                clienteAConDosCuentas:
+                  summary: Cliente A con una cuenta activa y una bloqueada
+                  value:
+                    - accountId: "8f14e45f-ceea-467e-adc4-0b3edabf1234"
+                      accountType: SAVINGS
+                      maskedNumber: "****1234"
+                      balance: { amount: 2500.00, currency: PEN }
+                      status: ACTIVE
+                    - accountId: "3c9e0f6a-6b5b-4a9e-9c2a-1d2e3f4a5b6c"
+                      accountType: SAVINGS
+                      maskedNumber: "****5678"
+                      balance: { amount: 800.00, currency: PEN }
+                      status: BLOCKED
+                clienteSinCuentas:
+                  summary: Cliente sin cuentas (CL1)
+                  value: []
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /accounts/{accountId}:
+    get:
+      tags: [Accounts]
+      operationId: getMyAccountById
+      summary: Consultar el detalle de una cuenta del cliente actual
+      description: >
+        Devuelve el detalle de una cuenta si pertenece al cliente actual. Si la cuenta no existe,
+        o si existe pero pertenece a otro cliente, la respuesta es idéntica (404 genérico) para no
+        revelar la existencia de productos ajenos (spec FR-016, FR-022, clarificación
+        2026-09-20).
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Detalle de la cuenta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDetail"
+              examples:
+                cuentaActiva:
+                  value:
+                    accountId: "8f14e45f-ceea-467e-adc4-0b3edabf1234"
+                    accountType: SAVINGS
+                    maskedNumber: "****1234"
+                    balance: { amount: 2500.00, currency: PEN }
+                    status: ACTIVE
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /debit-cards:
+    get:
+      tags: [DebitCards]
+      operationId: listMyDebitCards
+      summary: Listar las tarjetas de débito del cliente actual
+      description: >
+        Devuelve todas las tarjetas de débito pertenecientes al cliente actual, incluyendo las que
+        están BLOQUEADAS (spec FR-008, FR-015).
+      responses:
+        "200":
+          description: Lista de tarjetas de débito del cliente actual (puede estar vacía).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DebitCardSummary"
+              examples:
+                clienteAConDosTarjetas:
+                  summary: Cliente A con una tarjeta activa y una bloqueada
+                  value:
+                    - debitCardId: "1b6a5e2d-4f3c-4a1b-9e8d-7c6b5a4f3e2d"
+                      maskedNumber: "**** **** **** 4582"
+                      last4Digits: "4582"
+                      accountId: "8f14e45f-ceea-467e-adc4-0b3edabf1234"
+                      status: ACTIVE
+                      expiration: { month: 11, year: 2027 }
+                    - debitCardId: "9a8b7c6d-5e4f-4a3b-8c1d-2e3f4a5b6c7d"
+                      maskedNumber: "**** **** **** 9911"
+                      last4Digits: "9911"
+                      accountId: "3c9e0f6a-6b5b-4a9e-9c2a-1d2e3f4a5b6c"
+                      status: BLOCKED
+                      expiration: { month: 3, year: 2026 }
+                clienteSinTarjetas:
+                  summary: Cliente sin tarjetas (CL2)
+                  value: []
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /debit-cards/{debitCardId}:
+    get:
+      tags: [DebitCards]
+      operationId: getMyDebitCardById
+      summary: Consultar el detalle de una tarjeta de débito del cliente actual
+      description: >
+        Devuelve el detalle de una tarjeta si pertenece al cliente actual. Igual que en cuentas,
+        "no existe" y "pertenece a otro cliente" producen la misma respuesta 404 genérica (spec
+        FR-017, FR-022).
+      parameters:
+        - $ref: "#/components/parameters/DebitCardId"
+      responses:
+        "200":
+          description: Detalle de la tarjeta de débito.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DebitCardDetail"
+              examples:
+                tarjetaActiva:
+                  value:
+                    debitCardId: "1b6a5e2d-4f3c-4a1b-9e8d-7c6b5a4f3e2d"
+                    maskedNumber: "**** **** **** 4582"
+                    last4Digits: "4582"
+                    accountId: "8f14e45f-ceea-467e-adc4-0b3edabf1234"
+                    status: ACTIVE
+                    expiration: { month: 11, year: 2027 }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  parameters:
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      description: Identificador interno de la cuenta (no es el número de cuenta real).
+      schema:
+        type: string
+        format: uuid
+    DebitCardId:
+      name: debitCardId
+      in: path
+      required: true
+      description: Identificador interno de la tarjeta (no es el número de tarjeta real).
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    AccountType:
+      type: string
+      description: Tipo de cuenta. Solo SAVINGS está soportado en esta versión (spec RF-005).
+      enum: [SAVINGS]
+
+    AccountStatus:
+      type: string
+      description: Estado de la cuenta (spec RF-006).
+      enum: [ACTIVE, BLOCKED]
+
+    CardStatus:
+      type: string
+      description: Estado de la tarjeta de débito (spec RF-013).
+      enum: [ACTIVE, BLOCKED]
+
+    Currency:
+      type: string
+      description: Moneda. Solo PEN está soportado en esta versión (spec RB2/FR-005).
+      enum: [PEN]
+
+    Money:
+      type: object
+      description: Importe monetario con exactamente 2 decimales (spec RB3).
+      properties:
+        amount:
+          type: number
+          format: double
+          example: 2500.00
+        currency:
+          $ref: "#/components/schemas/Currency"
+      required: [amount, currency]
+      additionalProperties: false
+
+    CardExpiration:
+      type: object
+      properties:
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          example: 11
+        year:
+          type: integer
+          example: 2027
+      required: [month, year]
+      additionalProperties: false
+
+    AccountSummary:
+      type: object
+      description: Representación de una cuenta en el listado (spec FR-002).
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        accountType:
+          $ref: "#/components/schemas/AccountType"
+        maskedNumber:
+          type: string
+          description: Número de cuenta enmascarado, solo últimos 4 dígitos visibles.
+          example: "****1234"
+        balance:
+          $ref: "#/components/schemas/Money"
+        status:
+          $ref: "#/components/schemas/AccountStatus"
+      required: [accountId, accountType, maskedNumber, balance, status]
+      additionalProperties: false
+
+    AccountDetail:
+      allOf:
+        - $ref: "#/components/schemas/AccountSummary"
+      description: Detalle de una cuenta (spec FR-004); mismos atributos que el listado.
+
+    DebitCardSummary:
+      type: object
+      description: Representación de una tarjeta de débito en el listado (spec FR-009).
+      properties:
+        debitCardId:
+          type: string
+          format: uuid
+        maskedNumber:
+          type: string
+          description: Número de tarjeta enmascarado, solo últimos 4 dígitos visibles.
+          example: "**** **** **** 4582"
+        last4Digits:
+          type: string
+          pattern: "^[0-9]{4}$"
+          example: "4582"
+        accountId:
+          type: string
+          format: uuid
+          description: Cuenta de ahorro asociada, perteneciente al mismo cliente (spec RB6).
+        status:
+          $ref: "#/components/schemas/CardStatus"
+        expiration:
+          $ref: "#/components/schemas/CardExpiration"
+      required: [debitCardId, maskedNumber, last4Digits, accountId, status, expiration]
+      additionalProperties: false
+
+    DebitCardDetail:
+      allOf:
+        - $ref: "#/components/schemas/DebitCardSummary"
+      description: Detalle de una tarjeta de débito (spec FR-011); mismos atributos que el listado.
+
+    ProblemDetails:
+      type: object
+      description: >
+        Cuerpo de error conforme a RFC 9457 (Problem Details). Los mensajes son textos orientados
+        al cliente en español de Perú (Principio III de la constitución); nunca incluyen detalles
+        internos de persistencia (Principio VI).
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://banca-digital-pe.dev/errors/not-found"
+        title:
+          type: string
+          example: "Recurso no encontrado"
+        status:
+          type: integer
+          example: 404
+        detail:
+          type: string
+          example: "La cuenta solicitada no existe o no está disponible para este cliente."
+        instance:
+          type: string
+          example: "/api/v1/accounts/8f14e45f-ceea-467e-adc4-0b3edabf1234"
+      required: [title, status]
+      additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: >
+        El identificador provisto no tiene un formato válido (p. ej. no es un UUID). Validado por
+        FluentValidation antes de invocar el caso de uso.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            title: "Solicitud inválida"
+            status: 400
+            detail: "El identificador provisto no tiene un formato válido."
+    NotFound:
+      description: >
+        El recurso no existe, o existe pero pertenece a otro cliente. Ambos casos producen esta
+        misma respuesta genérica (spec FR-022, clarificación 2026-09-20).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            title: "Recurso no encontrado"
+            status: 404
+            detail: "El producto solicitado no existe o no está disponible para este cliente."
+    InternalServerError:
+      description: Error inesperado. No expone stack traces, excepciones de EF Core/PostgreSQL ni nombres de tablas (Principio VI).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            title: "Error inesperado"
+            status: 500
+            detail: "Ocurrió un error inesperado. Intente nuevamente más tarde."
