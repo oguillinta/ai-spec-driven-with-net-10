@@ -11,6 +11,13 @@ listar y consultar el detalle de sus cuentas de ahorro y de sus tarjetas de déb
 disponible, moneda, estado y datos principales, sin poder acceder a productos de otros clientes.
 No incluye autenticación ni operaciones de escritura; todos los datos son ficticios."
 
+## Clarifications
+
+### Session 2026-09-20
+
+- Q: ¿Qué formato de enmascaramiento debe usarse para el número de cuenta mostrado al cliente? → A: Igual que las tarjetas: se muestran solo los últimos 4 dígitos, el resto enmascarado (ej. ****5678).
+- Q: Cuando un cliente intenta consultar un producto que no existe versus uno que pertenece a otro cliente, ¿el sistema debe mostrar la misma respuesta genérica en ambos casos, o puede distinguir entre "no encontrado" y "no autorizado"? → A: Respuesta genérica idéntica en ambos casos, sin revelar si el producto ajeno existe.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Listar mis cuentas (Priority: P1)
@@ -123,9 +130,11 @@ cuenta o tarjeta perteneciente al Cliente B, incluso conociendo su identificador
 **Acceptance Scenarios**:
 
 1. **Given** que una cuenta pertenece al Cliente B, **When** el Cliente A intenta consultar esa
-   cuenta, **Then** el sistema no muestra su información financiera.
+   cuenta, **Then** el sistema no muestra su información financiera y responde con el mismo
+   mensaje genérico que usaría si esa cuenta no existiera.
 2. **Given** que una tarjeta pertenece al Cliente B, **When** el Cliente A intenta consultar dicha
-   tarjeta, **Then** el sistema no muestra sus datos.
+   tarjeta, **Then** el sistema no muestra sus datos y responde con el mismo mensaje genérico que
+   usaría si esa tarjeta no existiera.
 
 ---
 
@@ -140,9 +149,11 @@ cuenta o tarjeta perteneciente al Cliente B, incluso conociendo su identificador
 - **Todos los productos bloqueados**: si todas las cuentas o tarjetas están bloqueadas, continúan
   apareciendo con su estado correspondiente.
 - **Producto inexistente**: al intentar consultar un producto que no existe, el sistema no
-  muestra información de ningún otro producto.
+  muestra información de ningún otro producto y responde con el mismo mensaje genérico definido
+  para un producto ajeno (ver FR-022).
 - **Producto de otro cliente**: conocer o proporcionar el identificador de una cuenta o tarjeta
-  ajena no permite visualizar sus datos.
+  ajena no permite visualizar sus datos; la respuesta es indistinguible de la de un producto
+  inexistente (ver FR-022).
 - **Tarjeta con cuenta bloqueada**: una tarjeta asociada a una cuenta bloqueada continúa siendo
   visible; esta spec no define ningún comportamiento operativo adicional derivado de esa
   condición.
@@ -156,11 +167,12 @@ cuenta o tarjeta perteneciente al Cliente B, incluso conociendo su identificador
 - **FR-001**: El sistema DEBE permitir consultar la lista de cuentas de ahorro pertenecientes al
   cliente actual.
 - **FR-002**: Por cada cuenta listada, el sistema DEBE mostrar como mínimo tipo de cuenta, número
-  de cuenta enmascarado, saldo disponible, moneda y estado.
+  de cuenta enmascarado (solo los últimos cuatro dígitos visibles), saldo disponible, moneda y
+  estado.
 - **FR-003**: El sistema DEBE permitir consultar el detalle de una cuenta perteneciente al cliente
   actual.
-- **FR-004**: El detalle de la cuenta DEBE mostrar tipo de cuenta, número de cuenta enmascarado,
-  saldo disponible, moneda y estado.
+- **FR-004**: El detalle de la cuenta DEBE mostrar tipo de cuenta, número de cuenta enmascarado
+  (solo los últimos cuatro dígitos visibles), saldo disponible, moneda y estado.
 - **FR-005**: En esta versión, todas las cuentas DEBEN ser cuentas de ahorro denominadas en Soles
   peruanos (PEN).
 - **FR-006**: Una cuenta puede tener uno de los siguientes estados: ACTIVA o BLOQUEADA.
@@ -203,14 +215,19 @@ cuenta o tarjeta perteneciente al Cliente B, incluso conociendo su identificador
 - **FR-021**: Esta especificación es exclusivamente de consulta. El sistema NO DEBE permitir
   crear, modificar ni eliminar cuentas o tarjetas mediante las funcionalidades definidas en esta
   spec.
+- **FR-022**: Ante un intento de consulta sobre una cuenta o tarjeta que no existe, y ante un
+  intento de consulta sobre una cuenta o tarjeta perteneciente a otro cliente, el sistema DEBE
+  responder con el mismo mensaje genérico en ambos casos, de modo que el cliente NO DEBA poder
+  distinguir si un identificador ajeno corresponde a un producto real.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Cliente**: persona ficticia propietaria de productos bancarios. En esta versión existe un
   único cliente activo en el contexto de uso; no se maneja registro ni autenticación.
 - **Cuenta de ahorro**: producto bancario propiedad de un cliente. Atributos relevantes: tipo de
-  cuenta, número (enmascarado en toda interfaz de consulta), saldo disponible, moneda (PEN) y
-  estado (ACTIVA o BLOQUEADA). Pertenece a exactamente un cliente.
+  cuenta, número (enmascarado en toda interfaz de consulta, solo últimos cuatro dígitos visibles),
+  saldo disponible, moneda (PEN) y estado (ACTIVA o BLOQUEADA). Pertenece a exactamente un
+  cliente.
 - **Tarjeta de débito**: producto bancario propiedad de un cliente, asociado a exactamente una
   cuenta de ahorro del mismo cliente. Atributos relevantes: número (enmascarado, solo últimos
   cuatro dígitos visibles), fecha de vencimiento, estado (ACTIVA o BLOQUEADA) y referencia a la
@@ -223,7 +240,8 @@ cuenta o tarjeta perteneciente al Cliente B, incluso conociendo su identificador
 - **SC-001**: El 100% de las cuentas y tarjetas propiedad del cliente activo aparecen en sus
   respectivos listados, sin omisiones.
 - **SC-002**: El 0% de los intentos de consulta sobre cuentas o tarjetas pertenecientes a otro
-  cliente exponen información financiera o de identificación de esos productos.
+  cliente exponen información financiera o de identificación de esos productos, y la respuesta
+  obtenida es indistinguible de la de un producto inexistente.
 - **SC-003**: El 100% de los números de cuenta y de tarjeta mostrados en listados y detalles
   aparecen enmascarados, sin exponer el número completo en ningún caso.
 - **SC-004**: El 100% de los saldos e importes se presentan en Soles (PEN) con exactamente dos
