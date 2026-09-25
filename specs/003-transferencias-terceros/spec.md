@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-25
 
-**Status**: Draft
+**Status**: Approved
 
 **Input**: User description: "Transferencias de dinero desde una cuenta de ahorro del cliente
 actual hacia una cuenta de ahorro perteneciente a un cliente distinto, dentro del mismo banco. La
@@ -298,9 +298,10 @@ mínimos requeridos sin exponer información no permitida del destinatario.
 - **SC-001**: El 100% de las transferencias a terceros completadas exitosamente preservan la suma
   total de los saldos de la cuenta origen y destino (conservación del dinero, sin comisiones).
 - **SC-002**: El 0% de las transferencias a terceros rechazadas (saldo insuficiente, importe
-  inválido, cuenta origen ajena o bloqueada, cuenta destino inexistente, destino que resulta ser
-  cuenta propia) modifica el saldo de alguna de las cuentas involucradas, y la respuesta ante una
-  cuenta origen inexistente es idéntica a la de esa misma cuenta perteneciendo a otro cliente.
+  inválido, cuenta origen ajena o bloqueada, cuenta destino inexistente o bloqueada, destino que
+  resulta ser cuenta propia) modifica el saldo de alguna de las cuentas involucradas, y la
+  respuesta ante una cuenta origen inexistente es idéntica a la de esa misma cuenta perteneciendo
+  a otro cliente.
 - **SC-003**: El 100% de las solicitudes de transferencia a terceros lógicamente repetidas
   resultan en como máximo un único movimiento financiero aplicado.
 - **SC-004**: El 100% de las transferencias a terceros completadas exitosamente son identificables

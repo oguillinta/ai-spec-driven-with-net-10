@@ -61,7 +61,7 @@ producción
 | Principio | Evaluación | Estado |
 |---|---|---|
 | I. Simplicidad ante todo | Reutilización máxima de `002` (research.md §0): cero cambios a `Transfer`, `IUnitOfWork`, idempotencia, concurrencia; solo 2 métodos nuevos de repositorio, 1 repositorio mínimo nuevo, y un refactor acotado (`CommonTransferValidation`) en vez de duplicar reglas. Toda desviación real se registra en Complexity Tracking. | PASS |
-| II. Especificaciones primero y alcance gobernado por ellas | El plan implementa únicamente FR-001…FR-031 de `spec.md` (`Status: Draft` hasta clarify — ver nota de gobernanza) | PASS (ver nota) |
+| II. Especificaciones primero y alcance gobernado por ellas | El plan implementa únicamente FR-001…FR-031 de `spec.md` (`Status: Approved`) | PASS |
 | III. Mercado peruano | PEN fija (RB4), mensajes de error en español de Perú, fecha/hora en zona horaria de Perú (spec, Assumptions), nombres ficticios de clientes ahora representativos del mercado peruano (research.md §9) | PASS |
 | IV. Clean Architecture y responsabilidades separadas | Dependency Rule idéntica a `001`/`002`; nuevas reglas de negocio residen en Application (`ThirdPartyTransferValidation`, `CommonTransferValidation`) y Domain (`Customer.DisplayNameMasked`), nunca en Infrastructure/Api (research.md §5/§6) | PASS |
 | V. Integridad financiera | Atomicidad, idempotencia y trazabilidad 100% reutilizadas de `002` sin modificación (research.md §0/§1); concurrencia verificada explícitamente también para créditos concurrentes al destino, no solo débitos del origen (research.md §2) | PASS |
@@ -70,13 +70,11 @@ producción
 | VIII. Calidad automatizada | Suite de pruebas reutiliza helpers de `002`; se añade cobertura específica solo donde hay comportamiento nuevo (destino por número, privacidad del destinatario, créditos concurrentes) — ver Testing Strategy | PASS |
 | IX. Decisiones técnicas justificada | Cada decisión (unificación de Confirm/Get, separación de Preview, nuevo índice, nuevo repositorio) justificada en `research.md` con alternativas descartadas | PASS |
 
-**Nota de gobernanza (Principio II)**: al momento de generar este plan, `spec.md` fue clarificada
-el 2026-09-25 (3 preguntas resueltas, ver `## Clarifications` en spec.md) pero su encabezado
-todavía indica `Status: Draft`. Este plan asume que la spec será aprobada (`Status: Approved`)
-antes de `/speckit-tasks`, siguiendo exactamente el mismo patrón que `002` (cuyo hallazgo de
-`/speckit-analyze` exigió que el `Status: Approved` se estableciera formalmente antes de
-implementar). Se recomienda ejecutar `/speckit-analyze` después de `/speckit-tasks` para confirmar
-que no quedó ninguna brecha de gobernanza, igual que en `002`.
+**Nota de gobernanza (Principio II)**: `spec.md` fue clarificada el 2026-09-25 (3 preguntas
+resueltas, ver `## Clarifications` en spec.md) y aprobada (`Status: Approved`) tras el hallazgo D1
+de `/speckit-analyze`, que además corrigió una omisión menor en SC-002 (F1: "cuenta destino
+BLOQUEADA" no aparecía en su lista de motivos de rechazo, aunque FR-008 y su cobertura de pruebas
+ya la contemplaban) — mismo patrón de gobernanza ya aplicado en `002`.
 
 ### Gate adicional del input de planificación (sección 29)
 
@@ -100,8 +98,7 @@ que no quedó ninguna brecha de gobernanza, igual que en `002`.
 - [x] La solución sigue siendo simple (research.md, "alternativa más simple descartada" en cada sección).
 - [x] Toda complejidad adicional está justificada (ver Complexity Tracking).
 
-**Gate: APROBADO**, condicionado a que `spec.md` se apruebe formalmente antes de `/speckit-tasks`
-(ver nota de gobernanza arriba).
+**Gate: APROBADO.**
 
 ## Impact Analysis (respecto a `001` y `002`)
 
