@@ -245,6 +245,25 @@ public sealed class TransfersEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ConsultarTransferencia_EntreCuentasPropias_NoIncluyeNombreDeDestinatario()
+    {
+        // Regresión de 003 (data-model.md: destinationCustomerDisplayName solo se puebla cuando
+        // la transferencia resultó ser a un tercero): para una transferencia entre cuentas
+        // propias, ese campo debe estar ausente.
+        var referencia = await ObtenerVistaPreviaAsync(CuentaA, CuentaB, 25.00m);
+        var confirmacion = await ConfirmarAsync(referencia, $"key-{Guid.NewGuid()}");
+        var resultado = await confirmacion.Content.ReadFromJsonAsync<TransferResultResponse>();
+
+        var respuesta = await _client.GetAsync($"/api/v1/transfers/{resultado!.TransferId}");
+
+        respuesta.EnsureSuccessStatusCode();
+        using var documento = JsonDocument.Parse(await respuesta.Content.ReadAsStringAsync());
+        Assert.False(
+            documento.RootElement.TryGetProperty("destinationCustomerDisplayName", out var valor) && valor.ValueKind != JsonValueKind.Null,
+            "destinationCustomerDisplayName no debe estar presente para una transferencia entre cuentas propias.");
+    }
+
+    [Fact]
     public async Task ConsultarTransferencia_TrasReiniciarLaApi_DevuelveElMismoResultado()
     {
         // CA12: persistencia observable — un nuevo WebApplicationFactory contra la misma base de

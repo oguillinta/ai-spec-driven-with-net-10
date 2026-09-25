@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IDebitCardRepository, DebitCardRepository>();
         services.AddScoped<ITransferRepository, TransferRepository>();
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IPreviewTokenSigner, DataProtectionPreviewTokenSigner>();
 
         return services;

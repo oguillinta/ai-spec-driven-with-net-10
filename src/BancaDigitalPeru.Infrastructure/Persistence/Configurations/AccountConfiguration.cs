@@ -60,6 +60,11 @@ public sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
 
         builder.HasIndex(a => a.CustomerId).HasDatabaseName("ix_accounts_customer_id");
 
+        // Resolución de la cuenta destino por número (spec 003 FR-009): primera consulta real por
+        // este campo; la unicidad del número de cuenta es una invariante de negocio real que la
+        // base de datos debe reforzar como segunda línea de defensa (research.md de 003 §3/§9).
+        builder.HasIndex(a => a.Number).IsUnique().HasDatabaseName("ux_accounts_number");
+
         builder.HasOne<Customer>()
             .WithMany()
             .HasForeignKey(a => a.CustomerId)

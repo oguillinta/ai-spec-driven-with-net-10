@@ -2,9 +2,10 @@ using BancaDigitalPeru.Application.Accounts.GetCustomerAccountDetail;
 using BancaDigitalPeru.Application.Accounts.ListCustomerAccounts;
 using BancaDigitalPeru.Application.DebitCards.GetCustomerDebitCardDetail;
 using BancaDigitalPeru.Application.DebitCards.ListCustomerDebitCards;
-using BancaDigitalPeru.Application.Transfers.ConfirmOwnAccountTransfer;
-using BancaDigitalPeru.Application.Transfers.GetOwnAccountTransfer;
+using BancaDigitalPeru.Application.Transfers.ConfirmTransfer;
+using BancaDigitalPeru.Application.Transfers.GetTransfer;
 using BancaDigitalPeru.Application.Transfers.PreviewOwnAccountTransfer;
+using BancaDigitalPeru.Application.Transfers.PreviewThirdPartyTransfer;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BancaDigitalPeru.Application;
@@ -22,8 +23,9 @@ public static class DependencyInjection
         services.AddScoped<ListCustomerDebitCardsUseCase>();
         services.AddScoped<GetCustomerDebitCardDetailUseCase>();
         services.AddScoped<PreviewOwnAccountTransferUseCase>();
-        services.AddScoped<ConfirmOwnAccountTransferUseCase>();
-        services.AddScoped<GetOwnAccountTransferUseCase>();
+        services.AddScoped<PreviewThirdPartyTransferUseCase>();
+        services.AddScoped<ConfirmTransferUseCase>();
+        services.AddScoped<GetTransferUseCase>();
 
         return services;
     }

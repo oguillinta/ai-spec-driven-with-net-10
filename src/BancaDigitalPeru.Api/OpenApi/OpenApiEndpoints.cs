@@ -11,6 +11,7 @@ public static class OpenApiEndpoints
 {
     private const string BankingProductsRoutePattern = "/openapi/v1.yaml";
     private const string OwnAccountTransfersRoutePattern = "/openapi/transfers-v1.yaml";
+    private const string ThirdPartyTransfersRoutePattern = "/openapi/third-party-transfers-v1.yaml";
 
     public static IEndpointRouteBuilder MapOpenApiContracts(this IEndpointRouteBuilder endpoints)
     {
@@ -28,11 +29,19 @@ public static class OpenApiEndpoints
             await context.Response.SendFileAsync(filePath);
         });
 
+        endpoints.MapGet(ThirdPartyTransfersRoutePattern, async context =>
+        {
+            var filePath = Path.Combine(AppContext.BaseDirectory, "OpenApi", "third-party-transfers-v1.yaml");
+            context.Response.ContentType = "application/yaml";
+            await context.Response.SendFileAsync(filePath);
+        });
+
         endpoints.MapScalarApiReference(options =>
         {
             options.WithTitle("Banca Digital Perú");
             options.AddDocument("banking-products", "Consulta de Productos Bancarios", BankingProductsRoutePattern);
             options.AddDocument("own-account-transfers", "Transferencias entre cuentas propias", OwnAccountTransfersRoutePattern);
+            options.AddDocument("third-party-transfers", "Transferencias a cuentas de terceros", ThirdPartyTransfersRoutePattern);
         });
 
         return endpoints;

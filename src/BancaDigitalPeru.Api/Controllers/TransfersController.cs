@@ -2,9 +2,10 @@ using BancaDigitalPeru.Api.Contracts.Transfers;
 using BancaDigitalPeru.Api.ErrorHandling;
 using BancaDigitalPeru.Api.Validation;
 using BancaDigitalPeru.Application.Transfers;
-using BancaDigitalPeru.Application.Transfers.ConfirmOwnAccountTransfer;
-using BancaDigitalPeru.Application.Transfers.GetOwnAccountTransfer;
+using BancaDigitalPeru.Application.Transfers.ConfirmTransfer;
+using BancaDigitalPeru.Application.Transfers.GetTransfer;
 using BancaDigitalPeru.Application.Transfers.PreviewOwnAccountTransfer;
+using BancaDigitalPeru.Application.Transfers.PreviewThirdPartyTransfer;
 using BancaDigitalPeru.Domain.Accounts;
 using BancaDigitalPeru.Domain.Transfers;
 using FluentValidation;
@@ -17,26 +18,32 @@ namespace BancaDigitalPeru.Api.Controllers;
 public sealed class TransfersController : ControllerBase
 {
     private readonly PreviewOwnAccountTransferUseCase _previewOwnAccountTransfer;
-    private readonly ConfirmOwnAccountTransferUseCase _confirmOwnAccountTransfer;
-    private readonly GetOwnAccountTransferUseCase _getOwnAccountTransfer;
+    private readonly PreviewThirdPartyTransferUseCase _previewThirdPartyTransfer;
+    private readonly ConfirmTransferUseCase _confirmTransfer;
+    private readonly GetTransferUseCase _getTransfer;
     private readonly IValidator<TransferPreviewRequest> _previewRequestValidator;
+    private readonly IValidator<ThirdPartyTransferPreviewRequest> _thirdPartyPreviewRequestValidator;
     private readonly IValidator<ConfirmTransferRequest> _confirmRequestValidator;
     private readonly IValidator<IdempotencyKeyHeader> _idempotencyKeyHeaderValidator;
     private readonly IValidator<TransferIdRouteParameter> _transferIdValidator;
 
     public TransfersController(
         PreviewOwnAccountTransferUseCase previewOwnAccountTransfer,
-        ConfirmOwnAccountTransferUseCase confirmOwnAccountTransfer,
-        GetOwnAccountTransferUseCase getOwnAccountTransfer,
+        PreviewThirdPartyTransferUseCase previewThirdPartyTransfer,
+        ConfirmTransferUseCase confirmTransfer,
+        GetTransferUseCase getTransfer,
         IValidator<TransferPreviewRequest> previewRequestValidator,
+        IValidator<ThirdPartyTransferPreviewRequest> thirdPartyPreviewRequestValidator,
         IValidator<ConfirmTransferRequest> confirmRequestValidator,
         IValidator<IdempotencyKeyHeader> idempotencyKeyHeaderValidator,
         IValidator<TransferIdRouteParameter> transferIdValidator)
     {
         _previewOwnAccountTransfer = previewOwnAccountTransfer;
-        _confirmOwnAccountTransfer = confirmOwnAccountTransfer;
-        _getOwnAccountTransfer = getOwnAccountTransfer;
+        _previewThirdPartyTransfer = previewThirdPartyTransfer;
+        _confirmTransfer = confirmTransfer;
+        _getTransfer = getTransfer;
         _previewRequestValidator = previewRequestValidator;
+        _thirdPartyPreviewRequestValidator = thirdPartyPreviewRequestValidator;
         _confirmRequestValidator = confirmRequestValidator;
         _idempotencyKeyHeaderValidator = idempotencyKeyHeaderValidator;
         _transferIdValidator = transferIdValidator;
@@ -75,6 +82,38 @@ public sealed class TransfersController : ControllerBase
             : outcome.RejectionReason!.Value.ToProblemDetails(HttpContext);
     }
 
+    /// <summary>POST /api/v1/third-party-transfer-previews — spec 003 FR-010. Sin efecto financiero.</summary>
+    [HttpPost("third-party-transfer-previews")]
+    [ProducesResponseType<ThirdPartyTransferPreviewResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> PreviewThirdPartyTransfer([FromBody] ThirdPartyTransferPreviewRequest request, CancellationToken cancellationToken)
+    {
+        var validation = await _thirdPartyPreviewRequestValidator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid)
+        {
+            return ApiProblemDetails.BadRequest(HttpContext, validation.Errors[0].ErrorMessage);
+        }
+
+        if (request.SourceAccountId == Guid.Empty)
+        {
+            // Guid.Empty es sintácticamente válido pero AccountId lo rechaza como identidad real;
+            // debe tratarse como cualquier otra cuenta origen inexistente (mismo criterio que 002).
+            return TransferRejectionReason.AccountNotEligible.ToProblemDetails(HttpContext);
+        }
+
+        var outcome = await _previewThirdPartyTransfer.ExecuteAsync(
+            new AccountId(request.SourceAccountId),
+            new AccountNumber(request.DestinationAccountNumber),
+            request.Amount,
+            cancellationToken);
+
+        return outcome.IsSuccess
+            ? Ok(ThirdPartyTransferPreviewResponse.FromResult(outcome.Value!))
+            : outcome.RejectionReason!.Value.ToProblemDetails(HttpContext);
+    }
+
     /// <summary>POST /api/v1/transfers — spec FR-011/FR-012. Requiere Idempotency-Key.</summary>
     [HttpPost("transfers")]
     [ProducesResponseType<TransferResultResponse>(StatusCodes.Status201Created)]
@@ -100,7 +139,7 @@ public sealed class TransfersController : ControllerBase
             return ApiProblemDetails.BadRequest(HttpContext, headerValidation.Errors[0].ErrorMessage);
         }
 
-        var outcome = await _confirmOwnAccountTransfer.ExecuteAsync(
+        var outcome = await _confirmTransfer.ExecuteAsync(
             request.PreviewReference,
             new IdempotencyKey(idempotencyKey!),
             cancellationToken);
@@ -136,7 +175,7 @@ public sealed class TransfersController : ControllerBase
             return ApiProblemDetails.NotFound(HttpContext);
         }
 
-        var result = await _getOwnAccountTransfer.ExecuteAsync(new TransferId(parsedId), cancellationToken);
+        var result = await _getTransfer.ExecuteAsync(new TransferId(parsedId), cancellationToken);
 
         return result.IsFound
             ? Ok(TransferResultResponse.FromDto(result.Value!))

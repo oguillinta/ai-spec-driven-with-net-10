@@ -1,6 +1,6 @@
 using System.Text.Json;
 using BancaDigitalPeru.Application.Abstractions;
-using BancaDigitalPeru.Application.Transfers.PreviewOwnAccountTransfer;
+using BancaDigitalPeru.Application.Transfers;
 
 namespace BancaDigitalPeru.Application.UnitTests.TestDoubles;
 

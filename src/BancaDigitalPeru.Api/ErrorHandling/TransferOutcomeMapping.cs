@@ -22,6 +22,8 @@ public static class TransferOutcomeMapping
             httpContext, "idempotency-conflict", "Conflicto de idempotencia", "Esta Idempotency-Key ya fue utilizada con datos diferentes."),
         TransferRejectionReason.ConcurrencyConflict => Conflict(
             httpContext, "concurrency-conflict", "Conflicto de concurrencia", "La cuenta origen fue modificada por otra operación. Intente nuevamente."),
+        TransferRejectionReason.DestinationAccountNotFound => DestinationAccountNotFound(httpContext),
+        TransferRejectionReason.DestinationIsOwnAccount => DestinationIsOwnAccount(httpContext),
         _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "Motivo de rechazo de transferencia no mapeado.")
     };
 
@@ -48,6 +50,32 @@ public static class TransferOutcomeMapping
     })
     {
         StatusCode = StatusCodes.Status404NotFound,
+        ContentTypes = { "application/problem+json" }
+    };
+
+    private static ObjectResult DestinationAccountNotFound(HttpContext httpContext) => new(new ProblemDetails
+    {
+        Type = "https://banca-digital-pe.dev/errors/destination-not-found",
+        Title = "Cuenta destino no encontrada",
+        Status = StatusCodes.Status404NotFound,
+        Detail = "No existe ninguna cuenta con el número de cuenta indicado.",
+        Instance = httpContext.Request.Path
+    })
+    {
+        StatusCode = StatusCodes.Status404NotFound,
+        ContentTypes = { "application/problem+json" }
+    };
+
+    private static ObjectResult DestinationIsOwnAccount(HttpContext httpContext) => new(new ProblemDetails
+    {
+        Type = "https://banca-digital-pe.dev/errors/destination-is-own-account",
+        Title = "Transferencia rechazada",
+        Status = StatusCodes.Status422UnprocessableEntity,
+        Detail = "La cuenta destino indicada le pertenece a usted; use transferencias entre cuentas propias.",
+        Instance = httpContext.Request.Path
+    })
+    {
+        StatusCode = StatusCodes.Status422UnprocessableEntity,
         ContentTypes = { "application/problem+json" }
     };
 

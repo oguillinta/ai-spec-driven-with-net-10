@@ -33,5 +33,18 @@ public enum TransferRejectionReason
     IdempotencyConflict,
 
     /// <summary>Conflicto de concurrencia optimista sobre la cuenta origen (research.md §6).</summary>
-    ConcurrencyConflict
+    ConcurrencyConflict,
+
+    /// <summary>
+    /// (Spec 003) La cuenta destino no existe. A diferencia de <see cref="AccountNotEligible"/>,
+    /// este motivo es deliberadamente revelador (404 específico, no genérico): verificar la
+    /// validez del destino es el propósito de la transferencia a terceros (research.md de 003 §7).
+    /// </summary>
+    DestinationAccountNotFound,
+
+    /// <summary>
+    /// (Spec 003) La cuenta destino indicada pertenece al propio cliente ordenante; la operación
+    /// no se procesa como transferencia a terceros (FR-006 de 003, research.md §7).
+    /// </summary>
+    DestinationIsOwnAccount
 }

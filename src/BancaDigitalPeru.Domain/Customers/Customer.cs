@@ -6,6 +6,8 @@ namespace BancaDigitalPeru.Domain.Customers;
 /// </summary>
 public sealed class Customer
 {
+    private static readonly char[] NameSeparators = [' '];
+
     public CustomerId Id { get; }
     public string DisplayName { get; }
 
@@ -18,5 +20,22 @@ public sealed class Customer
 
         Id = id;
         DisplayName = displayName;
+    }
+
+    /// <summary>
+    /// Nombre parcialmente oculto del destinatario (spec 003, FR-011, clarificación 2026-09-25):
+    /// primer nombre completo + inicial del primer apellido + asteriscos (p. ej.
+    /// "Juan Pérez García" → "Juan P***"). Si <see cref="DisplayName"/> tiene un solo token,
+    /// devuelve ese token seguido de asteriscos sin inicial adicional.
+    /// </summary>
+    public string DisplayNameMasked
+    {
+        get
+        {
+            var tokens = DisplayName.Split(NameSeparators, StringSplitOptions.RemoveEmptyEntries);
+            return tokens.Length == 1
+                ? $"{tokens[0]}***"
+                : $"{tokens[0]} {tokens[1][0]}***";
+        }
     }
 }

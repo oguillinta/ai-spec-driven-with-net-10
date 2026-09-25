@@ -20,6 +20,7 @@
          output de Api para servirlo tal cual, sin generarlo desde código. -->
     <Content Include="..\..\specs\001-consulta-productos-bancarios\contracts\openapi\banking-products-v1.yaml" Link="OpenApi\banking-products-v1.yaml" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\specs\002-transferencias-cuentas-propias\contracts\openapi\own-account-transfers-v1.yaml" Link="OpenApi\own-account-transfers-v1.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\specs\003-transferencias-terceros\contracts\openapi\third-party-transfers-v1.yaml" Link="OpenApi\third-party-transfers-v1.yaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -1,7 +1,6 @@
 using BancaDigitalPeru.Application.Abstractions.Persistence;
 using BancaDigitalPeru.Application.Transfers;
-using BancaDigitalPeru.Application.Transfers.ConfirmOwnAccountTransfer;
-using BancaDigitalPeru.Application.Transfers.PreviewOwnAccountTransfer;
+using BancaDigitalPeru.Application.Transfers.ConfirmTransfer;
 using BancaDigitalPeru.Application.UnitTests.TestDoubles;
 using BancaDigitalPeru.Domain.Accounts;
 using BancaDigitalPeru.Domain.Common;
@@ -11,7 +10,7 @@ using Xunit;
 
 namespace BancaDigitalPeru.Application.UnitTests.Transfers;
 
-public class ConfirmOwnAccountTransferUseCaseTests
+public class ConfirmTransferUseCaseTests
 {
     private static readonly CustomerId ClienteA = new(Guid.Parse("a1111111-1111-1111-1111-111111111111"));
     private static readonly CustomerId ClienteB = new(Guid.Parse("b2222222-2222-2222-2222-222222222222"));
@@ -28,13 +27,15 @@ public class ConfirmOwnAccountTransferUseCaseTests
     private static string CrearReferencia(AccountId origen, AccountId destino, decimal importe) =>
         Signer.Protect(new TransferPreviewPayload(origen.Value, destino.Value, importe, CurrencyCode.PEN, DateTimeOffset.UtcNow));
 
-    private static ConfirmOwnAccountTransferUseCase CrearUseCase(
+    private static ConfirmTransferUseCase CrearUseCase(
         FakeAccountRepository accountRepository,
         FakeTransferRepository? transferRepository = null,
-        FakeUnitOfWork? unitOfWork = null) => new(
+        FakeUnitOfWork? unitOfWork = null,
+        FakeCustomerRepository? customerRepository = null) => new(
         new FakeCurrentCustomerProvider(ClienteA),
         accountRepository,
         transferRepository ?? new FakeTransferRepository(),
+        customerRepository ?? new FakeCustomerRepository([]),
         Signer,
         unitOfWork ?? new FakeUnitOfWork());
 
@@ -234,5 +235,95 @@ public class ConfirmOwnAccountTransferUseCaseTests
         Assert.True(outcome.IsSuccess);
         Assert.True(outcome.IsReplay);
         Assert.Equal(ganador.Id.Value, outcome.Value!.TransferId);
+    }
+
+    // --- Rama third-party (spec 003): la clasificación own-vs-third-party se determina
+    // dinámicamente comparando el propietario de la cuenta destino, no por la forma en que se
+    // construyó la referencia (research.md de 003 §5). ---
+
+    [Fact]
+    public async Task ExecuteAsync_HaciaUnTercero_DebitaOrigenAcreditaDestinoYPueblaNombreDelDestinatario()
+    {
+        var origen = CrearCuenta(ClienteA, 2500.00m);
+        var destino = CrearCuenta(ClienteB, 700.00m);
+        var accountRepository = new FakeAccountRepository([origen, destino]);
+        var customerRepository = new FakeCustomerRepository([new Customer(ClienteB, "Juan Pérez García")]);
+        var useCase = CrearUseCase(accountRepository, customerRepository: customerRepository);
+
+        var referencia = CrearReferencia(origen.Id, destino.Id, 300.00m);
+        var outcome = await useCase.ExecuteAsync(referencia, new IdempotencyKey("key-001"), CancellationToken.None);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(2200.00m, origen.Balance.Amount);
+        Assert.Equal(1000.00m, destino.Balance.Amount);
+        Assert.Equal("Juan P***", outcome.Value!.DestinationCustomerDisplayNameMasked);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_EntreCuentasPropias_NoPueblaNombreDelDestinatario()
+    {
+        var origen = CrearCuenta(ClienteA, 2500.00m);
+        var destino = CrearCuenta(ClienteA, 800.00m);
+        var useCase = CrearUseCase(new FakeAccountRepository([origen, destino]));
+
+        var referencia = CrearReferencia(origen.Id, destino.Id, 300.00m);
+        var outcome = await useCase.ExecuteAsync(referencia, new IdempotencyKey("key-001"), CancellationToken.None);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Null(outcome.Value!.DestinationCustomerDisplayNameMasked);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ConReferenciaAUnaCuentaDestinoQueYaNoExiste_RechazaComoAccountNotEligible()
+    {
+        // Estado inalcanzable en operación normal: ambos flujos de vista previa (propia y a
+        // terceros) ya validaron que la cuenta destino existe antes de firmar la referencia, y
+        // ninguna cuenta se elimina jamás en este sistema — por lo que una referencia válidamente
+        // firmada siempre debería apuntar a una cuenta destino que sigue existiendo al confirmar.
+        // Si igualmente ocurriera (p. ej. un error de programación en otra parte), no hay forma de
+        // determinar si la operación pretendía ser entre cuentas propias o a un tercero (esa
+        // clasificación depende de conocer al propietario de una cuenta que no existe), por lo que
+        // ConfirmTransferUseCase recae de forma segura en la rama de cuentas propias — el
+        // resultado más conservador en privacidad (research.md de 003 §5), no
+        // DestinationAccountNotFound.
+        var origen = CrearCuenta(ClienteA, 2500.00m);
+        var useCase = CrearUseCase(new FakeAccountRepository([origen]));
+
+        var referencia = CrearReferencia(origen.Id, new AccountId(Guid.NewGuid()), 100.00m);
+        var outcome = await useCase.ExecuteAsync(referencia, new IdempotencyKey("key-001"), CancellationToken.None);
+
+        Assert.False(outcome.IsSuccess);
+        Assert.Equal(TransferRejectionReason.AccountNotEligible, outcome.RejectionReason);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_HaciaCuentaDestinoBloqueadaDeUnTercero_RechazaComoAccountBlockedYNoModificaSaldos()
+    {
+        var origen = CrearCuenta(ClienteA, 2500.00m);
+        var destino = CrearCuenta(ClienteB, 700.00m, AccountStatus.Blocked);
+        var useCase = CrearUseCase(new FakeAccountRepository([origen, destino]));
+
+        var referencia = CrearReferencia(origen.Id, destino.Id, 100.00m);
+        var outcome = await useCase.ExecuteAsync(referencia, new IdempotencyKey("key-001"), CancellationToken.None);
+
+        Assert.False(outcome.IsSuccess);
+        Assert.Equal(TransferRejectionReason.AccountBlocked, outcome.RejectionReason);
+        Assert.Equal(2500.00m, origen.Balance.Amount);
+        Assert.Equal(700.00m, destino.Balance.Amount);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_HaciaUnTercero_ConSaldoInsuficiente_RechazaComoInsufficientFundsYNoModificaSaldos()
+    {
+        var origen = CrearCuenta(ClienteA, 100.00m);
+        var destino = CrearCuenta(ClienteB, 700.00m);
+        var useCase = CrearUseCase(new FakeAccountRepository([origen, destino]));
+
+        var referencia = CrearReferencia(origen.Id, destino.Id, 150.00m);
+        var outcome = await useCase.ExecuteAsync(referencia, new IdempotencyKey("key-001"), CancellationToken.None);
+
+        Assert.False(outcome.IsSuccess);
+        Assert.Equal(TransferRejectionReason.InsufficientFunds, outcome.RejectionReason);
+        Assert.Equal(100.00m, origen.Balance.Amount);
     }
 }

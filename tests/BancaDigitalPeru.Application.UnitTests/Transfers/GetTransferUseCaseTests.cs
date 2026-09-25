@@ -1,4 +1,4 @@
-using BancaDigitalPeru.Application.Transfers.GetOwnAccountTransfer;
+using BancaDigitalPeru.Application.Transfers.GetTransfer;
 using BancaDigitalPeru.Application.UnitTests.TestDoubles;
 using BancaDigitalPeru.Domain.Accounts;
 using BancaDigitalPeru.Domain.Common;
@@ -8,7 +8,7 @@ using Xunit;
 
 namespace BancaDigitalPeru.Application.UnitTests.Transfers;
 
-public class GetOwnAccountTransferUseCaseTests
+public class GetTransferUseCaseTests
 {
     private static readonly CustomerId ClienteA = new(Guid.Parse("a1111111-1111-1111-1111-111111111111"));
     private static readonly CustomerId ClienteB = new(Guid.Parse("b2222222-2222-2222-2222-222222222222"));
@@ -30,10 +30,11 @@ public class GetOwnAccountTransferUseCaseTests
             new TransferId(Guid.NewGuid()), ClienteA, origen.Id, destino.Id,
             Money.Create(300.00m, CurrencyCode.PEN), new IdempotencyKey("key-001"), DateTimeOffset.UtcNow);
 
-        var useCase = new GetOwnAccountTransferUseCase(
+        var useCase = new GetTransferUseCase(
             new FakeCurrentCustomerProvider(ClienteA),
             new FakeTransferRepository([transferencia]),
-            new FakeAccountRepository([origen, destino]));
+            new FakeAccountRepository([origen, destino]),
+            new FakeCustomerRepository([]));
 
         var result = await useCase.ExecuteAsync(transferencia.Id, CancellationToken.None);
 
@@ -49,10 +50,11 @@ public class GetOwnAccountTransferUseCaseTests
     [Fact]
     public async Task ExecuteAsync_ConTransferenciaInexistente_DevuelveNotFound()
     {
-        var useCase = new GetOwnAccountTransferUseCase(
+        var useCase = new GetTransferUseCase(
             new FakeCurrentCustomerProvider(ClienteA),
             new FakeTransferRepository(),
-            new FakeAccountRepository([]));
+            new FakeAccountRepository([]),
+            new FakeCustomerRepository([]));
 
         var result = await useCase.ExecuteAsync(new TransferId(Guid.NewGuid()), CancellationToken.None);
 
@@ -68,10 +70,11 @@ public class GetOwnAccountTransferUseCaseTests
             new TransferId(Guid.NewGuid()), ClienteB, origen.Id, destino.Id,
             Money.Create(300.00m, CurrencyCode.PEN), new IdempotencyKey("key-001"), DateTimeOffset.UtcNow);
 
-        var useCase = new GetOwnAccountTransferUseCase(
+        var useCase = new GetTransferUseCase(
             new FakeCurrentCustomerProvider(ClienteA),
             new FakeTransferRepository([transferenciaAjena]),
-            new FakeAccountRepository([origen, destino]));
+            new FakeAccountRepository([origen, destino]),
+            new FakeCustomerRepository([]));
 
         var resultadoInexistente = await useCase.ExecuteAsync(new TransferId(Guid.NewGuid()), CancellationToken.None);
         var resultadoAjena = await useCase.ExecuteAsync(transferenciaAjena.Id, CancellationToken.None);

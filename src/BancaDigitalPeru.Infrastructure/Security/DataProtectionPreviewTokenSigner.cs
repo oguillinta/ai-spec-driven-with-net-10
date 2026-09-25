@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using BancaDigitalPeru.Application.Abstractions;
-using BancaDigitalPeru.Application.Transfers.PreviewOwnAccountTransfer;
+using BancaDigitalPeru.Application.Transfers;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace BancaDigitalPeru.Infrastructure.Security;
@@ -14,7 +14,7 @@ namespace BancaDigitalPeru.Infrastructure.Security;
 /// </summary>
 public sealed class DataProtectionPreviewTokenSigner : IPreviewTokenSigner
 {
-    private const string Purpose = "BancaDigitalPeru.Transfers.OwnAccountTransferPreview.v1";
+    private const string Purpose = "BancaDigitalPeru.Transfers.TransferPreview.v1";
 
     private readonly IDataProtector _protector;
 

@@ -29,4 +29,18 @@ public sealed class AccountRepository : IAccountRepository
     public Task<Account?> GetByIdForCustomerAsync(CustomerId customerId, AccountId accountId, CancellationToken cancellationToken) =>
         _dbContext.Accounts
             .FirstOrDefaultAsync(a => a.CustomerId == customerId && a.Id == accountId, cancellationToken);
+
+    // Solo lectura: usado exclusivamente por la vista previa de transferencias a terceros para
+    // resolver el número de cuenta ingresado por el ordenante (spec 003 FR-009).
+    public Task<Account?> GetByNumberAsync(AccountNumber accountNumber, CancellationToken cancellationToken) =>
+        _dbContext.Accounts
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Number == accountNumber, cancellationToken);
+
+    // Sin AsNoTracking, mismo criterio que GetByIdForCustomerAsync: la confirmación de una
+    // transferencia a terceros muta la cuenta destino vía Account.Credit y necesita que quede
+    // rastreada (research.md de 003 §3).
+    public Task<Account?> GetByIdAsync(AccountId accountId, CancellationToken cancellationToken) =>
+        _dbContext.Accounts
+            .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
 }

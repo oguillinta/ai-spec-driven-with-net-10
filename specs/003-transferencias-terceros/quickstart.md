@@ -20,8 +20,10 @@ entorno ya levantado para `001`/`002` (misma Api, misma base de datos `banca_dig
   - Cliente A (`a1111111-...`) — `display_name`: "María López Torres" — Cuenta A
     (`aaaaaaaa-1111-...`, número `00123456780001`, ACTIVA, S/ 2,500.00).
   - Cliente B (`b2222222-...`) — `display_name`: "Juan Pérez García" — Cuenta B1
-    (`bbbbbbbb-1111-...`, número `00123456780003`, ACTIVA, S/ 700.00 — ajustar si el seed vigente
-    difiere, ver spec §6, Ejemplo de referencia).
+    (`bbbbbbbb-1111-...`, número `00123456780003`, ACTIVA, S/ 1,500.00 — valor real del seed de
+    `001`/`AddAccounts`, ya usado por pruebas existentes de `001`/`002`; distinto del S/ 700.00
+    puramente ilustrativo del ejemplo de referencia de la spec §6, que no se corresponde con
+    ningún dato sembrado literal).
 
 ## 1. Transferencia exitosa a un tercero (CA1, CA2, CA10)
 
@@ -46,9 +48,10 @@ curl -s http://localhost:5080/api/v1/accounts
 ```
 
 **Esperado**: Cuenta A en S/ 2,200.00 (Cliente A); consultar `GET /api/v1/accounts` como Cliente B
-(fuera del alcance de este script de un solo cliente activo) debería mostrar S/ 1,000.00 — validar
-mediante la prueba de integración dedicada, que sí puede consultar ambas cuentas directamente
-contra la base de datos. La suma total de ambos saldos antes y después es la misma (CA2).
+(fuera del alcance de este script de un solo cliente activo) debería mostrar S/ 1,800.00 (S/
+1,500.00 + S/ 300.00) — validar mediante la prueba de integración dedicada, que sí puede consultar
+ambas cuentas directamente contra la base de datos. La suma total de ambos saldos antes y después
+es la misma (CA2).
 
 ## 2. Cuenta destino inexistente (CA7, CL2)
 

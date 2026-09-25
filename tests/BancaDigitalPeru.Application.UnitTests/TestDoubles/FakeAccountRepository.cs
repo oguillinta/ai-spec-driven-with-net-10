@@ -28,4 +28,16 @@ public sealed class FakeAccountRepository : IAccountRepository
         var account = _accounts.FirstOrDefault(a => a.CustomerId == customerId && a.Id == accountId);
         return Task.FromResult(account);
     }
+
+    public Task<Account?> GetByNumberAsync(AccountNumber accountNumber, CancellationToken cancellationToken)
+    {
+        var account = _accounts.FirstOrDefault(a => a.Number.Equals(accountNumber));
+        return Task.FromResult(account);
+    }
+
+    public Task<Account?> GetByIdAsync(AccountId accountId, CancellationToken cancellationToken)
+    {
+        var account = _accounts.FirstOrDefault(a => a.Id == accountId);
+        return Task.FromResult(account);
+    }
 }

@@ -1,4 +1,4 @@
-using BancaDigitalPeru.Application.Transfers.PreviewOwnAccountTransfer;
+using BancaDigitalPeru.Application.Transfers;
 
 namespace BancaDigitalPeru.Application.Abstractions;
 
