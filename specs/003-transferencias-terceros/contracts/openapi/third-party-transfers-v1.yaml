@@ -1,0 +1,250 @@
+openapi: 3.1.0
+
+info:
+  title: Banca Digital Perú - Transferencias a cuentas de terceros
+  version: "1.0.0"
+  description: >
+    Contrato para transferir dinero desde una cuenta de ahorro del cliente actual (ordenante)
+    hacia una cuenta de ahorro perteneciente a otro cliente del mismo banco (destinatario), sin
+    autenticación (cliente ficticio de demostración). Proyecto académico: todos los datos son
+    ficticios. Corresponde a la feature `003-transferencias-terceros`.
+
+    Este documento define **únicamente** el paso de vista previa (`POST
+    /third-party-transfer-previews`), porque es el único elemento genuinamente nuevo del flujo:
+    el número de cuenta destino, no un identificador interno, y la información mínima permitida
+    del destinatario. La confirmación (`POST /transfers`) y la consulta de resultado (`GET
+    /transfers/{transferId}`) reutilizan **el mismo endpoint** ya definido en
+    `own-account-transfers-v1.yaml` (feature `002`): el cuerpo de la confirmación
+    (`previewReference` + header `Idempotency-Key`) es idéntico en ambos flujos, y el sistema
+    determina si una transferencia es entre cuentas propias o a un tercero comparando la
+    propiedad real de las cuentas involucradas, nunca mediante un campo del contrato
+    (research.md §5/§10). `TransferResult` en ese documento incluye un campo opcional,
+    `destinationCustomerDisplayName`, presente únicamente cuando la transferencia confirmada
+    resultó ser a un tercero.
+  contact:
+    name: Banca Digital Perú (proyecto académico)
+
+servers:
+  - url: /api/v1
+    description: Prefijo de versión v1, compartido con los contratos de banking-products y own-account-transfers.
+
+tags:
+  - name: ThirdPartyTransfers
+    description: Vista previa de una transferencia hacia la cuenta de otro cliente del mismo banco.
+
+paths:
+  /third-party-transfer-previews:
+    post:
+      tags: [ThirdPartyTransfers]
+      operationId: previewThirdPartyTransfer
+      summary: Solicitar una vista previa de una transferencia hacia la cuenta de un tercero
+      description: >
+        Valida cuenta origen (propiedad, estado ACTIVA, saldo suficiente), resuelve la cuenta
+        destino a partir del número de cuenta ingresado (FR-009), valida que exista, que
+        pertenezca a un cliente **distinto** del ordenante (FR-006/FR-008) y que esté ACTIVA, y
+        devuelve una referencia de vista previa junto con la información mínima permitida del
+        destinatario (nombre parcialmente oculto, FR-011). No tiene efecto financiero: no debita
+        ni acredita ningún saldo (mismo criterio que `002`, FR-010 de `003`). La referencia se
+        confirma mediante `POST /transfers` (definido en `own-account-transfers-v1.yaml`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ThirdPartyTransferPreviewRequest"
+            examples:
+              transferenciaValida:
+                value:
+                  sourceAccountId: "aaaaaaaa-1111-1111-1111-111111111111"
+                  destinationAccountNumber: "00123456780003"
+                  amount: 300.00
+      responses:
+        "200":
+          description: Vista previa válida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThirdPartyTransferPreviewResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/TransferRejected"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  schemas:
+    Currency:
+      type: string
+      description: Moneda. Solo PEN está soportado en esta versión (spec RB4).
+      enum: [PEN]
+
+    Money:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          example: 300.00
+        currency:
+          $ref: "#/components/schemas/Currency"
+      required: [amount, currency]
+      additionalProperties: false
+
+    ThirdPartyTransferPreviewRequest:
+      type: object
+      properties:
+        sourceAccountId:
+          type: string
+          format: uuid
+          description: Identificador interno de la cuenta origen del cliente ordenante.
+        destinationAccountNumber:
+          type: string
+          description: >
+            Número de cuenta bancario completo del destinatario (clarificación 2026-09-25, FR-009).
+            No es un identificador interno: es el mismo dato que el cliente escribiría en una
+            transferencia bancaria real.
+          example: "00123456780003"
+        amount:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          description: Importe en PEN, máximo 2 decimales (spec RF-013/RF-014).
+          example: 300.00
+      required: [sourceAccountId, destinationAccountNumber, amount]
+      additionalProperties: false
+
+    ThirdPartyTransferPreviewResponse:
+      type: object
+      description: >
+        Vista previa sin efecto financiero. Solo expone la información mínima del destinatario
+        permitida por RB10/FR-011: nunca su saldo, otros productos ni identificadores internos.
+      properties:
+        previewReference:
+          type: string
+          description: >
+            Referencia opaca y firmada por el backend; se debe enviar tal cual en la confirmación
+            (`POST /transfers`, definido en `own-account-transfers-v1.yaml`). No debe
+            interpretarse ni decodificarse por el cliente.
+          example: "CfDJ8N...opaque...=="
+        sourceAccountId:
+          type: string
+          format: uuid
+        destinationAccountMasked:
+          type: string
+          description: Número de cuenta destino enmascarado (últimos 4 dígitos visibles).
+          example: "****0003"
+        destinationCustomerDisplayName:
+          type: string
+          description: >
+            Nombre del destinatario parcialmente oculto (clarificación 2026-09-25, FR-011): primer
+            nombre completo + inicial del primer apellido + asteriscos.
+          example: "Juan P***"
+        amount:
+          $ref: "#/components/schemas/Money"
+      required:
+        [previewReference, sourceAccountId, destinationAccountMasked, destinationCustomerDisplayName, amount]
+      additionalProperties: false
+
+    ProblemDetails:
+      type: object
+      description: >
+        Cuerpo de error conforme a RFC 9457, igual convención que en `001`/`002`: mensajes en
+        español de Perú, sin detalles internos de persistencia (Principio VI).
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+      required: [title, status]
+      additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: >
+        Formato inválido: GUID mal formado, número de cuenta con formato inválido, o importe con
+        precisión inválida.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: "https://banca-digital-pe.dev/errors/bad-request"
+            title: "Solicitud inválida"
+            status: 400
+            detail: "El número de cuenta destino debe contener solo dígitos."
+    NotFound:
+      description: >
+        La cuenta origen no existe o pertenece a otro cliente (respuesta genérica, mismo criterio
+        de privacidad que la cuenta origen de `002`, FR-022 de `003`), **o** la cuenta destino no
+        existe (respuesta específica y reveladora por diseño: research.md §7, FR-024 de `003` —
+        a diferencia del origen, aquí "no existe" no necesita ocultarse, porque verificar la
+        validez del destino es el propósito de esta funcionalidad, HU3).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          examples:
+            sourceAccountNotEligible:
+              value:
+                type: "https://banca-digital-pe.dev/errors/not-found"
+                title: "Recurso no encontrado"
+                status: 404
+                detail: "La cuenta indicada no existe o no está disponible para esta operación."
+            destinationAccountNotFound:
+              value:
+                type: "https://banca-digital-pe.dev/errors/destination-not-found"
+                title: "Cuenta destino no encontrada"
+                status: 404
+                detail: "No existe ninguna cuenta con el número de cuenta indicado."
+    TransferRejected:
+      description: >
+        Regla de negocio que no revela información de un tercero: cuenta destino que resulta ser
+        una cuenta propia del ordenante (FR-006), cuenta origen o destino BLOQUEADA, importe
+        inválido, o saldo insuficiente.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          examples:
+            destinationIsOwnAccount:
+              value:
+                type: "https://banca-digital-pe.dev/errors/destination-is-own-account"
+                title: "Transferencia rechazada"
+                status: 422
+                detail: >
+                  La cuenta destino indicada le pertenece a usted; use transferencias entre
+                  cuentas propias.
+            accountBlocked:
+              value:
+                type: "https://banca-digital-pe.dev/errors/transfer-rejected"
+                title: "Transferencia rechazada"
+                status: 422
+                detail: "La cuenta origen o destino no está disponible para esta operación."
+            insufficientFunds:
+              value:
+                type: "https://banca-digital-pe.dev/errors/transfer-rejected"
+                title: "Transferencia rechazada"
+                status: 422
+                detail: "El saldo disponible de la cuenta origen es insuficiente."
+    InternalServerError:
+      description: Error inesperado. No expone stack traces, excepciones de EF Core/PostgreSQL ni nombres de tabla.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: "https://banca-digital-pe.dev/errors/internal"
+            title: "Error inesperado"
+            status: 500
+            detail: "Ocurrió un error inesperado. Intente nuevamente más tarde."

@@ -10,6 +10,15 @@ info:
     ficticios. Corresponde a la feature `002-transferencias-cuentas-propias`. Contrato separado
     del de `001` (banking-products-v1.yaml) por tratarse de una capacidad de negocio distinta
     (escritura financiera vs. consulta), documentado en research.md §0/§4.
+
+    Desde la feature `003-transferencias-terceros`, `POST /transfers` y
+    `GET /transfers/{transferId}` son compartidos por ambas features: el sistema determina si una
+    transferencia es entre cuentas propias o a un tercero comparando la propiedad real de las
+    cuentas, nunca mediante un campo del contrato (research.md de 003, §5/§10). Solo la vista
+    previa (`POST /transfer-previews`, exclusiva de cuentas propias) permanece separada, porque su
+    forma de solicitud difiere de forma irreducible de
+    `POST /third-party-transfer-previews` (definido en `third-party-transfers-v1.yaml`): esta
+    identifica el destino por `AccountId` interno, aquella por número de cuenta.
   contact:
     name: Banca Digital Perú (proyecto académico)
 
@@ -74,6 +83,12 @@ paths:
         ningún saldo. Requiere el header `Idempotency-Key`: una misma clave con los mismos datos
         devuelve el resultado ya existente sin aplicar el movimiento dos veces (spec FR-021/
         FR-022 renumerados; ver research.md §5).
+
+
+        Comparte este mismo endpoint la confirmación de transferencias a terceros (feature `003`,
+        vista previa iniciada en `POST /third-party-transfer-previews`): la referencia de vista
+        previa ya identifica de forma opaca qué cuentas participan, por lo que el cuerpo de la
+        solicitud es idéntico en ambos casos (research.md de 003 §5/§10).
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -123,7 +138,10 @@ paths:
       description: >
         Devuelve el resultado de una transferencia completada perteneciente al cliente actual
         (spec FR-018, User Story 4). "No existe" y "pertenece a otro cliente" producen la misma
-        respuesta 404 genérica, mismo criterio que en `001`.
+        respuesta 404 genérica, mismo criterio que en `001`. Comparte este mismo endpoint la
+        consulta de transferencias a terceros (feature `003`): el campo opcional
+        `destinationCustomerDisplayName` en la respuesta está presente únicamente cuando la
+        transferencia consultada resultó ser a un tercero.
       parameters:
         - name: transferId
           in: path
@@ -232,7 +250,10 @@ components:
 
     TransferResult:
       type: object
-      description: Resultado observable de una transferencia completada (spec FR-018).
+      description: >
+        Resultado observable de una transferencia completada (spec FR-018 de `002`, que exige
+        conocer "al menos" estos campos, admitiendo adiciones compatibles como
+        `destinationCustomerDisplayName`).
       properties:
         transferId:
           type: string
@@ -248,6 +269,14 @@ components:
         destinationAccountMasked:
           type: string
           example: "****0002"
+        destinationCustomerDisplayName:
+          type: string
+          description: >
+            Nombre parcialmente oculto del titular de la cuenta destino (feature `003`,
+            clarificación 2026-09-25). Presente únicamente cuando la transferencia es a un
+            tercero (propietario de la cuenta destino distinto del cliente ordenante); ausente
+            para transferencias entre cuentas propias.
+          example: "Juan P***"
         amount:
           $ref: "#/components/schemas/Money"
         status:
