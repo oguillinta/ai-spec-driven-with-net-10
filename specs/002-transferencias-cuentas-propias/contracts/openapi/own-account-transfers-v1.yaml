@@ -1,0 +1,364 @@
+openapi: 3.1.0
+
+info:
+  title: Banca Digital Perú - Transferencias entre cuentas propias
+  version: "1.0.0"
+  description: >
+    Contrato para transferir dinero entre dos cuentas de ahorro pertenecientes al mismo cliente
+    actual (de demostración, sin autenticación). Flujo en dos pasos: vista previa (sin efecto
+    financiero) y confirmación (ejecuta la transferencia). Proyecto académico: todos los datos son
+    ficticios. Corresponde a la feature `002-transferencias-cuentas-propias`. Contrato separado
+    del de `001` (banking-products-v1.yaml) por tratarse de una capacidad de negocio distinta
+    (escritura financiera vs. consulta), documentado en research.md §0/§4.
+  contact:
+    name: Banca Digital Perú (proyecto académico)
+
+servers:
+  - url: /api/v1
+    description: Prefijo de versión v1, compartido con el contrato de banking-products.
+
+tags:
+  - name: Transfers
+    description: Vista previa, confirmación y consulta de transferencias entre cuentas propias.
+
+paths:
+  /transfer-previews:
+    post:
+      tags: [Transfers]
+      operationId: previewOwnAccountTransfer
+      summary: Solicitar una vista previa de una transferencia entre cuentas propias
+      description: >
+        Valida cuenta origen, cuenta destino e importe (propiedad, cuentas distintas, moneda,
+        estado ACTIVA de ambas cuentas, importe válido y saldo suficiente) y devuelve una
+        referencia de vista previa. No tiene efecto financiero: no debita ni acredita ningún
+        saldo, y no queda registrada como movimiento (spec FR-010, clarificación 2026-09-24). La
+        referencia no reserva saldo ni vence explícitamente; todas las condiciones se revalidan
+        al confirmar (FR-012).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferPreviewRequest"
+            examples:
+              transferenciaValida:
+                value:
+                  sourceAccountId: "aaaaaaaa-1111-1111-1111-111111111111"
+                  destinationAccountId: "aaaaaaaa-2222-2222-2222-222222222222"
+                  amount: 300.00
+      responses:
+        "200":
+          description: Vista previa válida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferPreviewResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/AccountNotEligible"
+        "422":
+          $ref: "#/components/responses/TransferRejected"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /transfers:
+    post:
+      tags: [Transfers]
+      operationId: confirmOwnAccountTransfer
+      summary: Confirmar una vista previa y ejecutar la transferencia
+      description: >
+        Ejecuta la transferencia a partir de una referencia de vista previa válida. Revalida
+        íntegramente las condiciones vigentes en este momento (FR-012): si algo cambió desde la
+        vista previa (p. ej. el saldo ya no alcanza), la confirmación se rechaza sin modificar
+        ningún saldo. Requiere el header `Idempotency-Key`: una misma clave con los mismos datos
+        devuelve el resultado ya existente sin aplicar el movimiento dos veces (spec FR-021/
+        FR-022 renumerados; ver research.md §5).
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmTransferRequest"
+      responses:
+        "201":
+          description: Transferencia confirmada y ejecutada por primera vez.
+          headers:
+            Location:
+              description: URL del recurso de la transferencia creada.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResult"
+        "200":
+          description: >
+            Replay idempotente: ya existía una transferencia completada con la misma
+            `Idempotency-Key` y los mismos datos. Se devuelve su resultado sin aplicar el
+            movimiento nuevamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/AccountNotEligible"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/TransferRejected"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /transfers/{transferId}:
+    get:
+      tags: [Transfers]
+      operationId: getOwnAccountTransferById
+      summary: Consultar el resultado de una transferencia ya completada
+      description: >
+        Devuelve el resultado de una transferencia completada perteneciente al cliente actual
+        (spec FR-018, User Story 4). "No existe" y "pertenece a otro cliente" producen la misma
+        respuesta 404 genérica, mismo criterio que en `001`.
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          description: Identificador de operación generado por el backend al confirmar.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Resultado de la transferencia.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >
+        Identificador opaco generado por el cliente para esta solicitud lógica de confirmación
+        (1–255 caracteres). Reenviar la misma clave con los mismos datos es seguro (replay
+        idempotente); reenviarla con datos distintos produce un conflicto (409).
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        example: "3f29b6b0-9e3a-4c7a-8a1e-2c8f7e6d5b4a"
+
+  schemas:
+    Currency:
+      type: string
+      description: Moneda. Solo PEN está soportado en esta versión (spec RB3).
+      enum: [PEN]
+
+    Money:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          example: 300.00
+        currency:
+          $ref: "#/components/schemas/Currency"
+      required: [amount, currency]
+      additionalProperties: false
+
+    TransferPreviewRequest:
+      type: object
+      properties:
+        sourceAccountId:
+          type: string
+          format: uuid
+          description: Identificador interno de la cuenta origen (no el número real de cuenta).
+        destinationAccountId:
+          type: string
+          format: uuid
+          description: Identificador interno de la cuenta destino.
+        amount:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          description: Importe en PEN, máximo 2 decimales (spec RF-007/RF-008).
+          example: 300.00
+      required: [sourceAccountId, destinationAccountId, amount]
+      additionalProperties: false
+
+    TransferPreviewResponse:
+      type: object
+      properties:
+        previewReference:
+          type: string
+          description: >
+            Referencia opaca y firmada por el backend; se debe enviar tal cual en
+            ConfirmTransferRequest. No debe interpretarse ni decodificarse por el cliente.
+          example: "CfDJ8N...opaque...=="
+        sourceAccountId:
+          type: string
+          format: uuid
+        destinationAccountId:
+          type: string
+          format: uuid
+        amount:
+          $ref: "#/components/schemas/Money"
+      required: [previewReference, sourceAccountId, destinationAccountId, amount]
+      additionalProperties: false
+
+    ConfirmTransferRequest:
+      type: object
+      properties:
+        previewReference:
+          type: string
+          description: Referencia devuelta por POST /transfer-previews.
+      required: [previewReference]
+      additionalProperties: false
+
+    TransferResult:
+      type: object
+      description: Resultado observable de una transferencia completada (spec FR-018).
+      properties:
+        transferId:
+          type: string
+          format: uuid
+          description: Identificador único de operación, generado por el backend (FR-016).
+        completedAt:
+          type: string
+          format: date-time
+          description: Fecha y hora de la confirmación, generada por el backend (FR-017).
+        sourceAccountMasked:
+          type: string
+          example: "****0001"
+        destinationAccountMasked:
+          type: string
+          example: "****0002"
+        amount:
+          $ref: "#/components/schemas/Money"
+        status:
+          type: string
+          enum: [COMPLETED]
+      required:
+        [transferId, completedAt, sourceAccountMasked, destinationAccountMasked, amount, status]
+      additionalProperties: false
+
+    ProblemDetails:
+      type: object
+      description: >
+        Cuerpo de error conforme a RFC 9457, igual convención que en `001`: mensajes en español de
+        Perú, sin detalles internos de persistencia (Principio VI).
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+      required: [title, status]
+      additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: >
+        Formato inválido: GUID mal formado, importe con precisión inválida, `Idempotency-Key`
+        ausente o mal formada, o referencia de vista previa no decodificable.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: "https://banca-digital-pe.dev/errors/bad-request"
+            title: "Solicitud inválida"
+            status: 400
+            detail: "El importe debe tener como máximo dos decimales."
+    AccountNotEligible:
+      description: >
+        La cuenta origen o destino no existe, o pertenece a otro cliente. Ambos casos producen
+        esta misma respuesta genérica (research.md §8, mismo criterio de privacidad que FR-022,
+        aplicado simétricamente a origen y destino).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: "https://banca-digital-pe.dev/errors/not-found"
+            title: "Recurso no encontrado"
+            status: 404
+            detail: "La cuenta indicada no existe o no está disponible para esta operación."
+    NotFound:
+      description: La transferencia no existe o no pertenece al cliente actual.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: "https://banca-digital-pe.dev/errors/not-found"
+            title: "Recurso no encontrado"
+            status: 404
+            detail: "La transferencia solicitada no existe o no está disponible para este cliente."
+    TransferRejected:
+      description: >
+        Regla de negocio no relacionada con privacidad: misma cuenta como origen y destino,
+        cuenta origen o destino BLOQUEADA, importe inválido, o saldo insuficiente. El `detail`
+        indica el motivo específico (spec RB2/RB3/RB4/RB7/RB8, sección FR-006).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: "https://banca-digital-pe.dev/errors/transfer-rejected"
+            title: "Transferencia rechazada"
+            status: 422
+            detail: "El saldo disponible de la cuenta origen es insuficiente."
+    Conflict:
+      description: >
+        Conflicto de `Idempotency-Key` (reutilizada con datos distintos) o conflicto de
+        concurrencia optimista (otra operación modificó la cuenta origen antes de confirmar).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          examples:
+            idempotencyConflict:
+              value:
+                type: "https://banca-digital-pe.dev/errors/idempotency-conflict"
+                title: "Conflicto de idempotencia"
+                status: 409
+                detail: "Esta Idempotency-Key ya fue utilizada con datos diferentes."
+            concurrencyConflict:
+              value:
+                type: "https://banca-digital-pe.dev/errors/concurrency-conflict"
+                title: "Conflicto de concurrencia"
+                status: 409
+                detail: "La cuenta origen fue modificada por otra operación. Intente nuevamente."
+    InternalServerError:
+      description: Error inesperado. No expone stack traces, excepciones de EF Core/PostgreSQL ni nombres de tabla.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: "https://banca-digital-pe.dev/errors/internal"
+            title: "Error inesperado"
+            status: 500
+            detail: "Ocurrió un error inesperado. Intente nuevamente más tarde."
