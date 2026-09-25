@@ -56,19 +56,18 @@ se diseña para volumen de producción
 | Principio | Evaluación | Estado |
 |---|---|---|
 | I. Simplicidad ante todo | Vista previa sin persistencia (token firmado, no una tabla nueva); `xmin` nativo en vez de una columna `RowVersion` propia; sin reintento automático; sin Redis/locks distribuidos. Toda desviación real se registra en Complexity Tracking. | PASS |
-| II. Especificaciones primero y alcance gobernado por ellas | El plan implementa únicamente FR-001…FR-027 de `spec.md` (`Status: Draft`; ver nota de gobernanza) | PASS (ver nota) |
+| II. Especificaciones primero y alcance gobernado por ellas | El plan implementa únicamente FR-001…FR-027 de `spec.md` (`Status: Approved`) | PASS |
 | III. Mercado peruano | PEN fija (RB3), mensajes de error en español de Perú, fecha/hora presentada en zona horaria de Perú (spec, Assumptions) | PASS |
 | IV. Clean Architecture y responsabilidades separadas | Dependency Rule idéntica a `001`; `Account.Debit/Credit` como comportamiento de Domain, no lógica anémica en Application (research.md §2) | PASS |
 | V. Integridad financiera | `Money`/`decimal` sin pérdida de precisión; atomicidad vía una única Unit of Work (research.md §7); idempotencia real con restricción única persistente (research.md §5); toda transferencia completada es trazable (`Transfer`, RB10) | PASS |
-| VI. Seguridad y mínimo privilegio | Filtrado de propiedad server-side (nunca se confía en `customerId` del cliente); 404 genérico e idéntico ante cuenta origen/destino inexistente o ajena (research.md §8, extendiendo FR-022 simétricamente); mensajes de rechazo de negocio sin datos sensibles de terceros | PASS |
+| VI. Seguridad y mínimo privilegio | Filtrado de propiedad server-side (nunca se confía en `customerId` del cliente); 404 genérico e idéntico ante cuenta origen/destino inexistente o ajena (research.md §8; FR-021/FR-022, clarificación 2026-09-24); mensajes de rechazo de negocio sin datos sensibles de terceros | PASS |
 | VII. Comportamiento verificable | Todos los endpoints trazan a criterios Dado/Cuando/Entonces de `spec.md` (tabla en quickstart.md) | PASS |
 | VIII. Calidad automatizada | Suite de pruebas más estricta que en `001` por el riesgo financiero: Domain/Application/Integration, incluyendo atomicidad, idempotencia y concurrencia reales contra PostgreSQL (ver Testing Strategy) | PASS |
 | IX. Decisiones técnicas justificada | Cada decisión técnica (idempotencia, concurrencia, transacción, vista previa) justificada en `research.md` con alternativas descartadas | PASS |
 
-**Nota de gobernanza (Principio II)**: `spec.md` está en `Status: Draft`. Igual que en `001`, el
-Principio II exige `Status: Approved` antes de implementar. La spec ya no tiene marcadores
-`[NEEDS CLARIFICATION]` (resueltos el 2026-09-24), por lo que solo falta el cambio formal de
-estado antes de `/speckit-tasks`/implementación real.
+`spec.md` está en `Status: Approved` (aprobada el 2026-09-24, tras una segunda ronda de
+clarificación que formalizó en FR-021 la misma respuesta indistinguible que FR-022 ya exigía para
+la cuenta destino, extendida simétricamente a la cuenta origen — hallazgo de `/speckit-analyze`).
 
 ### Gate adicional del input de planificación (sección 27)
 

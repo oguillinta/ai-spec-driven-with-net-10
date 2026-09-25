@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-24
 
-**Status**: Draft
+**Status**: Approved
 
 **Input**: User description: "Transferencias de dinero entre cuentas de ahorro que pertenecen al
 mismo cliente. El cliente selecciona una cuenta origen y una cuenta destino, ambas propias, e
@@ -20,6 +20,7 @@ Continúa sin autenticación, sobre el cliente ficticio ya definido en la spec 0
 - Q: ¿La transferencia entre cuentas propias necesita un paso explícito de "vista previa" separado de la ejecución final, o basta con que una única solicitud incluya cuenta origen, cuenta destino e importe y se ejecute directamente? → A: Flujo en dos pasos: un paso de vista previa que valida y muestra los datos, y un paso separado de confirmación que recién ejecuta.
 - Q: ¿La respuesta ante una cuenta destino inexistente debe ser indistinguible de la respuesta ante una cuenta destino que pertenece a otro cliente, o puede indicar específicamente que la cuenta destino no es válida? → A: Respuesta genérica idéntica en ambos casos, sin revelar si la cuenta destino existe (mismo criterio que la spec 001).
 - Q: ¿Una cuenta destino BLOQUEADA puede recibir una transferencia entre cuentas propias, o debe rechazarse igual que si fuera cuenta origen? → A: Se rechaza igual que el origen: ninguna cuenta BLOQUEADA participa en una transferencia, ni como origen ni como destino.
+- Q: ¿La regla de respuesta indistinguible de FR-022 (cuenta destino ajena/inexistente) debe aplicar simétricamente a la cuenta origen ajena/inexistente, o solo a la cuenta destino? → A: Aplica simétricamente a ambas: ninguna respuesta debe permitir distinguir "no existe" de "es de otro cliente", ni para origen ni para destino (mismo criterio de privacidad, detectado durante /speckit.plan).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -89,7 +90,9 @@ exactamente igual que antes del intento.
    cuenta destino, **Then** la transferencia es rechazada y ningún saldo cambia (clarificación
    2026-09-24).
 6. **Given** que una cuenta pertenece a otro cliente, **When** el cliente actual intenta
-   utilizarla como origen, **Then** la operación es rechazada y ningún saldo es modificado.
+   utilizarla como origen, **Then** la operación es rechazada, ningún saldo es modificado, y la
+   respuesta es idéntica a la que se obtendría si esa cuenta no existiera (clarificación
+   2026-09-24).
 7. **Given** que la cuenta destino pertenece a otro cliente, **When** se intenta ejecutar la
    operación mediante esta funcionalidad, **Then** no se procesa como transferencia entre cuentas
    propias, ningún saldo es modificado, y la respuesta es idéntica a la que se obtendría si la
@@ -144,7 +147,8 @@ mínimos requeridos.
 
 - **Importe con más de dos decimales**: la operación no debe ejecutarse con un importe cuya
   precisión no sea válida para esta versión (rechazo, ningún saldo cambia).
-- **Cuenta origen inexistente**: la operación se rechaza sin modificar ningún saldo.
+- **Cuenta origen inexistente**: la operación se rechaza sin modificar ningún saldo, con la misma
+  respuesta que si la cuenta origen perteneciera a otro cliente (FR-021).
 - **Cuenta destino inexistente**: la operación se rechaza sin modificar ningún saldo, con la misma
   respuesta que si la cuenta destino perteneciera a otro cliente (FR-022).
 - **Saldo cero**: una cuenta con saldo S/ 0.00 no puede realizar una transferencia por un importe
@@ -215,7 +219,10 @@ mínimos requeridos.
   modificarse.
 - **FR-020**: Si el importe es cero o negativo, la operación DEBE ser rechazada y ningún saldo
   DEBE modificarse.
-- **FR-021**: Si la cuenta origen no pertenece al cliente actual, la operación DEBE ser rechazada.
+- **FR-021**: Si la cuenta origen no pertenece al cliente actual o no existe, la operación DEBE
+  ser rechazada, y la respuesta DEBE ser la misma en ambos casos (idéntica a la de cualquier otro
+  rechazo de esta funcionalidad), sin revelar si la cuenta origen existe (clarificación
+  2026-09-24, mismo criterio de privacidad que FR-022).
 - **FR-022**: Si la cuenta destino no pertenece al cliente actual o no existe, esta funcionalidad
   NO DEBE procesar la operación como transferencia entre cuentas propias, y la respuesta DEBE ser
   la misma en ambos casos (idéntica a la de cualquier otro rechazo de esta funcionalidad), sin
@@ -262,8 +269,9 @@ mínimos requeridos.
   los saldos de la cuenta origen y destino (conservación del dinero, sin comisiones).
 - **SC-002**: El 0% de las transferencias rechazadas (saldo insuficiente, importe inválido, misma
   cuenta, cuenta origen o destino bloqueada, cuenta origen o destino ajena) modifica el saldo de
-  alguna de las cuentas involucradas, y la respuesta ante cuenta destino inexistente es idéntica a
-  la de cuenta destino ajena.
+  alguna de las cuentas involucradas, y la respuesta ante una cuenta (origen o destino)
+  inexistente es idéntica a la de esa misma cuenta perteneciendo a otro cliente (clarificación
+  2026-09-24).
 - **SC-003**: El 100% de las solicitudes de transferencia lógicamente repetidas resultan en como
   máximo un único movimiento financiero aplicado.
 - **SC-004**: El 100% de las transferencias completadas exitosamente son identificables

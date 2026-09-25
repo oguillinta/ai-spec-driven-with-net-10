@@ -205,7 +205,7 @@ ellos).
 | Transferencia confirmada (nueva) | 201 Created | `TransferResult` |
 | Replay idempotente (misma clave, mismos datos) | 200 OK | `TransferResult` (el ya existente) |
 | Formato inválido (GUID, importe con precisión inválida, `Idempotency-Key` ausente/mal formada, referencia de vista previa no decodificable) | 400 | `ProblemDetails` genérico "Solicitud inválida" |
-| Cuenta origen o destino inexistente, o perteneciente a otro cliente | 404 | `ProblemDetails` genérico idéntico en ambos casos (research.md aplica el mismo criterio de FR-022 simétricamente a origen y destino — spec solo lo pidió explícito para destino, pero la misma razón de privacidad aplica igual al origen) |
+| Cuenta origen o destino inexistente, o perteneciente a otro cliente | 404 | `ProblemDetails` genérico idéntico en ambos casos (FR-021/FR-022, clarificación 2026-09-24: la respuesta indistinguible aplica simétricamente a origen y destino) |
 | Misma cuenta como origen y destino, cuenta origen o destino BLOQUEADA, importe ≤ 0, saldo insuficiente | 422 | `ProblemDetails` con `detail` específico por caso (no son datos sensibles: el cliente ya conoce el estado de sus propias cuentas) |
 | `Idempotency-Key` reutilizada con datos distintos | 409 | `ProblemDetails` "conflicto de idempotencia" |
 | Conflicto de concurrencia optimista | 409 | `ProblemDetails` "conflicto de concurrencia, intente nuevamente" |
@@ -249,3 +249,20 @@ sin necesidad de infraestructura de test adicional (Principio I).
 
 **Alternatives considered**: herramientas de testing de concurrencia dedicadas (rechazadas: no
 justificadas para el alcance de esta feature).
+
+## 11. Constraints defensivas de base de datos evaluadas y descartadas
+
+**Decision**: No se añaden `CHECK` constraints de PostgreSQL para `amount > 0` ni para
+`source_account_id <> destination_account_id` en la tabla `transfers`.
+
+**Rationale**: Ambos invariantes ya están protegidos en Domain (`Account.Debit`/`Credit` y
+`Transfer.Create`, data-model.md) y se ejercitan en cada confirmación antes de llegar a
+persistencia; a diferencia de la `IdempotencyKey` (que sí protege contra una condición de carrera
+real entre dos procesos concurrentes que Domain no puede ver), estos dos invariantes no tienen una
+ventana de carrera equivalente — ninguna solicitud concurrente puede hacer que una `Transfer` con
+importe inválido o cuentas iguales llegue a `SaveChangesAsync`, porque ambos se calculan a partir
+de datos ya validados en la misma llamada, no de una lectura que pueda quedar obsoleta. Añadir los
+`CHECK` no protegería ningún caso real adicional (Principio I).
+
+**Alternatives considered**: `CHECK (amount_amount > 0)` y
+`CHECK (source_account_id <> destination_account_id)` (descartados por lo anterior).
