@@ -15,6 +15,14 @@ duplicar el movimiento ante una solicitud repetida, y no revelar información fi
 del cliente destinatario (saldo, otros productos, identificadores internos). Continúa sin
 autenticación, sobre el cliente ficticio ordenante ya definido en las specs 001/002."
 
+## Clarifications
+
+### Session 2026-09-25
+
+- Q: ¿Qué dato debe ingresar el cliente ordenante para indicar la cuenta destino de un tercero? → A: El cliente ingresa el número de cuenta bancario completo del destinatario (como en una transferencia real).
+- Q: ¿Qué información del destinatario debe mostrarse al cliente ordenante para reconocer el destino antes de confirmar? → A: Nombre parcialmente oculto (mismo criterio de enmascaramiento ya usado para números de cuenta/tarjeta en 001): primer nombre completo + inicial del primer apellido seguida de asteriscos (p. ej., "Juan P***").
+- Q: ¿Puede una cuenta destino BLOQUEADA recibir una transferencia a terceros, o debe rechazarse igual que si fuera la cuenta origen? → A: Se rechaza igual que el origen: ninguna cuenta BLOQUEADA participa en una transferencia, ni como origen ni como destino (mismo criterio que 002).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Transferir dinero a la cuenta de un tercero (Priority: P1)
@@ -84,7 +92,10 @@ que antes del intento.
    **Then** la operación es rechazada y ningún saldo cambia.
 5. **Given** que la cuenta origen es válida, **When** el cliente indica una cuenta destino
    inexistente, **Then** la transferencia es rechazada y la cuenta origen conserva su saldo.
-6. **Given** que las cuentas origen y destino pertenecen al mismo cliente, **When** se intenta
+6. **Given** que la cuenta destino existe pero está BLOQUEADA, **When** el cliente intenta
+   transferir dinero hacia ella, **Then** la operación es rechazada y ningún saldo cambia
+   (clarificación 2026-09-25).
+7. **Given** que las cuentas origen y destino pertenecen al mismo cliente, **When** se intenta
    realizar la operación mediante esta funcionalidad, **Then** la operación no se procesa como
    transferencia a terceros (permanece gobernada por `002-transferencias-cuentas-propias`).
 
@@ -144,8 +155,10 @@ mínimos requeridos sin exponer información no permitida del destinatario.
   respuesta que si la cuenta origen perteneciera a otro cliente (FR-022).
 - **Cuenta destino inexistente**: la operación se rechaza sin producir ningún movimiento
   financiero (FR-024).
+- **Cuenta destino BLOQUEADA**: la operación se rechaza igual que si la cuenta BLOQUEADA fuera la
+  cuenta origen, sin producir ningún movimiento financiero (FR-008, clarificación 2026-09-25).
 - **Cuenta destino perteneciente al cliente ordenante**: no se procesa mediante esta feature (ver
-  User Story 2, escenario 6).
+  User Story 2, escenario 7).
 - **Saldo cero**: una cuenta origen con saldo S/ 0.00 no puede realizar una transferencia por un
   importe positivo.
 - **Solicitud repetida**: reenviar la misma operación no genera movimientos financieros
@@ -183,13 +196,12 @@ mínimos requeridos sin exponer información no permitida del destinatario.
   Assumptions).
 - **FR-007**: El sistema NO DEBE revelar información financiera sensible de la cuenta destino (p.
   ej. su saldo) durante la validación de su existencia.
-- **FR-008**: Si la cuenta destino existe pero se encuentra BLOQUEADA, el sistema DEBE
-  [NEEDS CLARIFICATION: ¿una cuenta destino BLOQUEADA puede recibir una transferencia a terceros,
-  o debe rechazarse igual que si fuera cuenta origen? PA3 del input original]
-- **FR-009**: El cliente DEBE identificar la cuenta destino mediante
-  [NEEDS CLARIFICATION: ¿qué dato ingresa el cliente para indicar la cuenta destino — el número de
-  cuenta bancaria completo del destinatario, un identificador interno, u otro medio funcional? PA1
-  del input original]
+- **FR-008**: La cuenta destino DEBE encontrarse en estado ACTIVA para poder recibir una
+  transferencia a terceros; si está BLOQUEADA, la operación DEBE rechazarse igual que si la
+  cuenta BLOQUEADA fuera la cuenta origen (clarificación 2026-09-25, mismo criterio que `002`).
+- **FR-009**: El cliente DEBE identificar la cuenta destino ingresando el número de cuenta
+  bancario completo del destinatario (clarificación 2026-09-25); el sistema DEBE resolver a partir
+  de ese número la cuenta y su cliente propietario.
 
 **Privacidad del destinatario**
 
@@ -197,9 +209,11 @@ mínimos requeridos sin exponer información no permitida del destinatario.
   como mínimo: cuenta origen, cuenta destino enmascarada, información mínima del destinatario
   suficiente para reconocer razonablemente el destino, e importe.
 - **FR-011**: La información mínima del destinatario mostrada en FR-010 y en el resultado
-  (FR-021) DEBE limitarse a
-  [NEEDS CLARIFICATION: ¿qué dato(s) del destinatario deben mostrarse — nombre completo, nombre
-  parcialmente oculto, u otra representación? PA2 del input original]
+  (FR-021) DEBE limitarse al nombre parcialmente oculto del titular de la cuenta destino: primer
+  nombre completo seguido de la inicial del primer apellido y asteriscos (p. ej., "Juan P***"),
+  sin revelar el resto del nombre, apellidos completos, documento de identidad, ni ningún otro
+  dato personal (clarificación 2026-09-25, mismo criterio de enmascaramiento que `AccountNumber`/
+  `CardNumber` en `001`).
 - **FR-012**: El sistema NO DEBE exponer al cliente ordenante el saldo, otros productos
   (cuentas, tarjetas), identificadores internos, ni ninguna otra información financiera del
   cliente destinatario que no sea la definida en FR-011.
@@ -270,8 +284,8 @@ mínimos requeridos sin exponer información no permitida del destinatario.
   importe, y una referencia para confirmarla). No es una `Transferencia`: no tiene efecto
   financiero y no queda registrada como movimiento; no reserva saldo.
 - **Cliente destinatario**: cliente ficticio distinto del cliente ordenante, propietario de la
-  cuenta destino. No participa activamente en la operación; solo aporta la información mínima
-  visible definida en FR-011.
+  cuenta destino. No participa activamente en la operación; solo aporta su nombre parcialmente
+  oculto (FR-011) como información mínima visible.
 - **Cuenta de ahorro (`Account`)**: entidad ya definida en `001-consulta-productos-bancarios`;
   esta spec reutiliza la operación de débito/crédito sobre su saldo introducida en
   `002-transferencias-cuentas-propias`, sujeta a las reglas de propiedad, estado y moneda ya

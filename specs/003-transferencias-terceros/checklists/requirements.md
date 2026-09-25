@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -24,22 +24,19 @@
 
 ## Feature Readiness
 
-- [ ] All functional requirements have clear acceptance criteria
+- [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
 
 ## Notes
 
-- Quedan 3 marcadores `[NEEDS CLARIFICATION]` (límite máximo permitido), correspondientes a
-  FR-008 (cuenta destino BLOQUEADA), FR-009 (medio de identificación de la cuenta destino) y
-  FR-011 (información mínima del destinatario a mostrar) — las 3 preguntas de mayor impacto
-  (seguridad/privacidad y alcance funcional) entre las 8 preguntas abiertas (PA1-PA8) del input
-  original. Deben resolverse en `/speckit.clarify` antes de `/speckit.plan`.
-- Las 5 preguntas abiertas restantes (PA4-PA8) se resolvieron con supuestos razonables
-  documentados en la sección Assumptions, reutilizando precedentes ya establecidos en
-  `001`/`002`, por no tener impacto suficiente para justificar un marcador adicional (límite de
-  3 ya alcanzado por las preguntas de mayor impacto).
-- FR-008, FR-009 y FR-011 quedan sin un criterio de aceptación totalmente cerrado hasta que se
-  resuelvan sus clarificaciones correspondientes; el resto de la spec sí cumple el criterio de
-  "criterios de aceptación claros".
+- Los 3 marcadores `[NEEDS CLARIFICATION]` (FR-008 cuenta destino BLOQUEADA, FR-009 medio de
+  identificación de la cuenta destino, FR-011 información mínima del destinatario) se resolvieron
+  en la sesión de clarificación del 2026-09-25 (ver `## Clarifications` en spec.md) y quedaron
+  integrados en FR-008, FR-009 y FR-011, junto con sus User Stories, Edge Cases y Key Entities
+  relacionados.
+- Las 5 preguntas abiertas restantes del input original (PA4-PA8) se resolvieron con supuestos
+  razonables documentados en la sección Assumptions, reutilizando precedentes ya establecidos en
+  `001`/`002`, por no tener impacto suficiente para justificar un marcador adicional (límite de 3).
+- Todos los ítems de la checklist pasaron tras la ronda de clarificación.
