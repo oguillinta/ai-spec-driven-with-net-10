@@ -20,8 +20,13 @@ public sealed class AccountRepository : IAccountRepository
             .Where(a => a.CustomerId == customerId)
             .ToListAsync(cancellationToken);
 
+    // Sin AsNoTracking (a diferencia de GetByCustomerAsync): desde 002, este método también carga
+    // la cuenta origen/destino de una confirmación de transferencia, que Application muta vía
+    // Account.Debit/Credit y que debe quedar rastreada para que SaveChangesAsync la persista y
+    // aplique el concurrency token `xmin` (plan.md "Repository Strategy": la interfaz no cambia de
+    // forma, solo esta implementación). El uso de solo lectura de 001 no se ve afectado: el
+    // DbContext es de duración por solicitud y se descarta sin cambios pendientes.
     public Task<Account?> GetByIdForCustomerAsync(CustomerId customerId, AccountId accountId, CancellationToken cancellationToken) =>
         _dbContext.Accounts
-            .AsNoTracking()
             .FirstOrDefaultAsync(a => a.CustomerId == customerId && a.Id == accountId, cancellationToken);
 }

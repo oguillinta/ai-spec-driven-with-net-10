@@ -65,5 +65,17 @@ public sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
             .HasForeignKey(a => a.CustomerId)
             .HasConstraintName("fk_accounts_customers")
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Concurrency token optimista nativo de PostgreSQL (research.md §6 de 002): la columna de
+        // sistema `xmin`, mapeada como shadow property (no se añade ningún miembro a Account,
+        // preservando Domain puro). Patrón verificado contra Npgsql.EntityFrameworkCore.PostgreSQL
+        // 10.0.3: no existe un método de extensión "UseXminAsConcurrencyToken" en esta versión del
+        // proveedor (Technical Risk anticipado en plan.md); la forma soportada es declarar la
+        // columna de sistema explícitamente con IsRowVersion()/IsConcurrencyToken().
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
     }
 }

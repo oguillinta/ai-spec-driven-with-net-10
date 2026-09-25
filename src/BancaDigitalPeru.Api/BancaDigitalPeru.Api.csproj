@@ -19,6 +19,7 @@
     <!-- El contrato versionado vive en specs/ (fuente de verdad, research.md §7); se copia al
          output de Api para servirlo tal cual, sin generarlo desde código. -->
     <Content Include="..\..\specs\001-consulta-productos-bancarios\contracts\openapi\banking-products-v1.yaml" Link="OpenApi\banking-products-v1.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\specs\002-transferencias-cuentas-propias\contracts\openapi\own-account-transfers-v1.yaml" Link="OpenApi\own-account-transfers-v1.yaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

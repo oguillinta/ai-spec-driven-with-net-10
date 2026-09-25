@@ -7,3 +7,5 @@ namespace BancaDigitalPeru.Api.Validation;
 public sealed record AccountIdRouteParameter(string Value);
 
 public sealed record DebitCardIdRouteParameter(string Value);
+
+public sealed record TransferIdRouteParameter(string Value);

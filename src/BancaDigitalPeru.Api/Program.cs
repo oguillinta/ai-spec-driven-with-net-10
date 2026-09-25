@@ -10,13 +10,18 @@ builder.Services
     .AddInfrastructure(builder.Configuration)
     .AddApiServices();
 
+// Key ring de Data Protection para firmar las referencias de vista previa de transferencias
+// (research.md §4/§9 de 002): por defecto, en disco local; conocido no compatible con múltiples
+// instancias sin almacén compartido (Technical Risks, plan.md).
+builder.Services.AddDataProtection();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapBankingProductsOpenApiContract();
+    app.MapOpenApiContracts();
 }
 
 app.UseHttpsRedirection();

@@ -3,27 +3,36 @@ using Scalar.AspNetCore;
 namespace BancaDigitalPeru.Api.OpenApi;
 
 /// <summary>
-/// Sirve el contrato OpenAPI estático versionado (contracts/openapi/banking-products-v1.yaml) y
-/// configura Scalar como su único consumidor visual (research.md §7): Scalar nunca genera el
-/// contrato, solo lo muestra.
+/// Sirve los contratos OpenAPI estáticos versionados (uno por capacidad de negocio, plan.md "API
+/// First Strategy" de 002) y configura Scalar con ambas fuentes (research.md §7 de 001): Scalar
+/// nunca genera ningún contrato, solo los muestra.
 /// </summary>
 public static class OpenApiEndpoints
 {
-    private const string ContractRoutePattern = "/openapi/v1.yaml";
+    private const string BankingProductsRoutePattern = "/openapi/v1.yaml";
+    private const string OwnAccountTransfersRoutePattern = "/openapi/transfers-v1.yaml";
 
-    public static IEndpointRouteBuilder MapBankingProductsOpenApiContract(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapOpenApiContracts(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet(ContractRoutePattern, async context =>
+        endpoints.MapGet(BankingProductsRoutePattern, async context =>
         {
             var filePath = Path.Combine(AppContext.BaseDirectory, "OpenApi", "banking-products-v1.yaml");
             context.Response.ContentType = "application/yaml";
             await context.Response.SendFileAsync(filePath);
         });
 
+        endpoints.MapGet(OwnAccountTransfersRoutePattern, async context =>
+        {
+            var filePath = Path.Combine(AppContext.BaseDirectory, "OpenApi", "own-account-transfers-v1.yaml");
+            context.Response.ContentType = "application/yaml";
+            await context.Response.SendFileAsync(filePath);
+        });
+
         endpoints.MapScalarApiReference(options =>
         {
-            options.WithTitle("Banca Digital Perú - Consulta de Productos Bancarios");
-            options.WithOpenApiRoutePattern(ContractRoutePattern);
+            options.WithTitle("Banca Digital Perú");
+            options.AddDocument("banking-products", "Consulta de Productos Bancarios", BankingProductsRoutePattern);
+            options.AddDocument("own-account-transfers", "Transferencias entre cuentas propias", OwnAccountTransfersRoutePattern);
         });
 
         return endpoints;

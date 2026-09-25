@@ -3,6 +3,7 @@ using BancaDigitalPeru.Application.Abstractions.Persistence;
 using BancaDigitalPeru.Infrastructure.CurrentCustomer;
 using BancaDigitalPeru.Infrastructure.Persistence;
 using BancaDigitalPeru.Infrastructure.Persistence.Repositories;
+using BancaDigitalPeru.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,8 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IDebitCardRepository, DebitCardRepository>();
+        services.AddScoped<ITransferRepository, TransferRepository>();
+        services.AddScoped<IPreviewTokenSigner, DataProtectionPreviewTokenSigner>();
 
         return services;
     }

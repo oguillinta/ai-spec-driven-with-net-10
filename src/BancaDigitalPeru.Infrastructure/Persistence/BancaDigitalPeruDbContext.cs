@@ -1,6 +1,7 @@
 using BancaDigitalPeru.Domain.Accounts;
 using BancaDigitalPeru.Domain.Customers;
 using BancaDigitalPeru.Domain.DebitCards;
+using BancaDigitalPeru.Domain.Transfers;
 using Microsoft.EntityFrameworkCore;
 
 namespace BancaDigitalPeru.Infrastructure.Persistence;
@@ -17,6 +18,8 @@ public sealed class BancaDigitalPeruDbContext : DbContext
     public DbSet<Account> Accounts => Set<Account>();
 
     public DbSet<DebitCard> DebitCards => Set<DebitCard>();
+
+    public DbSet<Transfer> Transfers => Set<Transfer>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

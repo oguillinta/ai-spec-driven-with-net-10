@@ -30,7 +30,7 @@ nuevos.
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Agregar la referencia a `Microsoft.AspNetCore.DataProtection.Abstractions` (ya
+- [X] T001 [P] Agregar la referencia a `Microsoft.AspNetCore.DataProtection.Abstractions` (ya
       forma parte del framework de ASP.NET Core, sin paquete de terceros — research.md §4) en
       `src/BancaDigitalPeru.Infrastructure/BancaDigitalPeru.Infrastructure.csproj`
 
@@ -47,91 +47,91 @@ las historias de usuario necesitan.
 
 ### Domain
 
-- [ ] T002 Modificar `src/BancaDigitalPeru.Domain/Accounts/Account.cs`: cambiar `Balance` de
+- [X] T002 Modificar `src/BancaDigitalPeru.Domain/Accounts/Account.cs`: cambiar `Balance` de
       `{ get; }` a `{ get; private set; }` y agregar los métodos `Debit(Money amount)` y
       `Credit(Money amount)` (data-model.md "Account (modificada)"): `Debit` exige misma moneda,
       `amount.Amount > 0`, `Status == AccountStatus.Active` (RF-005/FR-023) y
       `amount.Amount <= Balance.Amount` (RF-009/FR-019); `Credit` exige misma moneda,
       `amount.Amount > 0` y `Status == AccountStatus.Active` (FR-006, clarificación 2026-09-24:
       destino BLOQUEADA se rechaza igual que origen)
-- [ ] T003 [P] Crear value object `TransferId` en `src/BancaDigitalPeru.Domain/Transfers/TransferId.cs`
+- [X] T003 [P] Crear value object `TransferId` en `src/BancaDigitalPeru.Domain/Transfers/TransferId.cs`
       (envoltorio de `Guid`, invariante no-vacío, mismo patrón que `AccountId`)
-- [ ] T004 [P] Crear value object `IdempotencyKey` en `src/BancaDigitalPeru.Domain/Transfers/IdempotencyKey.cs`
+- [X] T004 [P] Crear value object `IdempotencyKey` en `src/BancaDigitalPeru.Domain/Transfers/IdempotencyKey.cs`
       (envoltorio de `string`, invariante: longitud entre 1 y 255 caracteres — data-model.md)
-- [ ] T005 [P] Crear enum `TransferStatus` en `src/BancaDigitalPeru.Domain/Transfers/TransferStatus.cs`
+- [X] T005 [P] Crear enum `TransferStatus` en `src/BancaDigitalPeru.Domain/Transfers/TransferStatus.cs`
       con único miembro `Completed` (data-model.md, cerrado intencionalmente: una transferencia
       rechazada nunca se persiste como `Transfer`)
-- [ ] T006 Crear entidad `Transfer` en `src/BancaDigitalPeru.Domain/Transfers/Transfer.cs` con
+- [X] T006 Crear entidad `Transfer` en `src/BancaDigitalPeru.Domain/Transfers/Transfer.cs` con
       factory `Transfer.Create(...)`: invariantes `Amount.Currency == PEN` y
       `SourceAccountId != DestinationAccountId` (data-model.md) (depende de T003, T004, T005)
-- [ ] T007 [P] Prueba unitaria de `Account.Debit`/`Credit` (débito válido, crédito válido, saldo
+- [X] T007 [P] Prueba unitaria de `Account.Debit`/`Credit` (débito válido, crédito válido, saldo
       insuficiente, importe inválido, cuenta no ACTIVA en origen y en destino) en
       `tests/BancaDigitalPeru.Domain.UnitTests/Accounts/AccountDebitCreditTests.cs` (depende de T002)
-- [ ] T008 [P] Prueba unitaria de `Transfer.Create` (moneda PEN, cuentas distintas) en
+- [X] T008 [P] Prueba unitaria de `Transfer.Create` (moneda PEN, cuentas distintas) en
       `tests/BancaDigitalPeru.Domain.UnitTests/Transfers/TransferTests.cs` (depende de T006)
 
 ### Application
 
-- [ ] T009 [P] Crear interfaz `ITransferRepository` en
+- [X] T009 [P] Crear interfaz `ITransferRepository` en
       `src/BancaDigitalPeru.Application/Abstractions/Persistence/ITransferRepository.cs`:
       `Add(Transfer)`, `GetByIdForCustomerAsync(CustomerId, TransferId, CancellationToken) -> Transfer?`,
       `GetByIdempotencyKeyAsync(IdempotencyKey, CancellationToken) -> Transfer?` (plan.md
       "Repository Strategy") (depende de T006)
-- [ ] T010 [P] Crear interfaz `IPreviewTokenSigner` en
+- [X] T010 [P] Crear interfaz `IPreviewTokenSigner` en
       `src/BancaDigitalPeru.Application/Abstractions/IPreviewTokenSigner.cs`:
       `Protect(TransferPreviewPayload) -> string`, `Unprotect(string) -> TransferPreviewPayload?`
       (research.md §4)
-- [ ] T011 [P] Crear record `TransferPreviewPayload` en
+- [X] T011 [P] Crear record `TransferPreviewPayload` en
       `src/BancaDigitalPeru.Application/Transfers/PreviewOwnAccountTransfer/TransferPreviewPayload.cs`
       (`SourceAccountId`, `DestinationAccountId`, `Amount`, `IssuedAtUtc` — data-model.md)
-- [ ] T012 [P] Crear tipo de resultado `TransferOutcome` en
+- [X] T012 [P] Crear tipo de resultado `TransferOutcome` en
       `src/BancaDigitalPeru.Application/Transfers/TransferOutcome.cs`: estado `Found` con el
       payload correspondiente, o rechazo con una razón (`AccountNotEligible`, `SameAccount`,
       `AccountBlocked`, `InvalidAmount`, `InsufficientFunds`, `IdempotencyConflict`,
       `ConcurrencyConflict`) — plan.md "Application Use Case"; las razones se van consumiendo
       progresivamente en US1/US2/US3
-- [ ] T013 [P] Crear `TransferResultDto` en `src/BancaDigitalPeru.Application/Transfers/TransferResultDto.cs`
+- [X] T013 [P] Crear `TransferResultDto` en `src/BancaDigitalPeru.Application/Transfers/TransferResultDto.cs`
       (`TransferId`, `CompletedAtUtc`, `SourceAccountId`, `DestinationAccountId`, `Amount`,
       `Status` — reutilizado por la confirmación exitosa y por la consulta de US4)
 
 ### Infrastructure
 
-- [ ] T014 [P] Modificar `src/BancaDigitalPeru.Infrastructure/Persistence/Configurations/AccountConfiguration.cs`:
+- [X] T014 [P] Modificar `src/BancaDigitalPeru.Infrastructure/Persistence/Configurations/AccountConfiguration.cs`:
       agregar `UseXminAsConcurrencyToken()` como concurrency token nativo de PostgreSQL, sin
       columna nueva (research.md §6) (depende de T002)
-- [ ] T015 [P] Crear `TransferConfiguration` (Fluent API) en
+- [X] T015 [P] Crear `TransferConfiguration` (Fluent API) en
       `src/BancaDigitalPeru.Infrastructure/Persistence/Configurations/TransferConfiguration.cs`:
       tabla `transfers`, `Money` vía `OwnsOne`, `TransferId`/`AccountId`/`CustomerId`/`IdempotencyKey`
       vía `HasConversion`, `TransferStatus` vía `HasConversion<string>()`, índice único en
       `idempotency_key` (data-model.md) (depende de T006)
-- [ ] T016 [P] Agregar `DbSet<Transfer> Transfers` a
+- [X] T016 [P] Agregar `DbSet<Transfer> Transfers` a
       `src/BancaDigitalPeru.Infrastructure/Persistence/BancaDigitalPeruDbContext.cs` (depende de T006)
-- [ ] T017 Implementar `TransferRepository` en
+- [X] T017 Implementar `TransferRepository` en
       `src/BancaDigitalPeru.Infrastructure/Persistence/Repositories/TransferRepository.cs`,
       implementando `ITransferRepository` con `AsNoTracking()` en las lecturas (depende de T009, T015, T016)
-- [ ] T018 [P] Implementar `DataProtectionPreviewTokenSigner` en
+- [X] T018 [P] Implementar `DataProtectionPreviewTokenSigner` en
       `src/BancaDigitalPeru.Infrastructure/Security/DataProtectionPreviewTokenSigner.cs` usando
       `IDataProtectionProvider` (research.md §4) (depende de T001, T010, T011)
-- [ ] T019 Crear la migración EF Core `AddTransfersAndAccountConcurrencyToken` (tabla `transfers` +
+- [X] T019 Crear la migración EF Core `AddTransfersAndAccountConcurrencyToken` (tabla `transfers` +
       `xmin` en `accounts`) en `src/BancaDigitalPeru.Infrastructure/Migrations/`, incluyendo
       `migrationBuilder.UpdateData(...)` **dentro de esta misma migración nueva** (nunca editando
       la migración `AddAccounts` de `001`, ya aplicada) para poner la Cuenta B del Cliente A en
       estado `Active` con saldo suficiente para los escenarios de esta feature — editar una
       migración histórica no tiene efecto en una base de datos donde ya se aplicó (depende de
       T014, T015, T016)
-- [ ] T020 Registrar `ITransferRepository -> TransferRepository` e `IPreviewTokenSigner ->
+- [X] T020 Registrar `ITransferRepository -> TransferRepository` e `IPreviewTokenSigner ->
       DataProtectionPreviewTokenSigner` en `AddInfrastructure()`
       (`src/BancaDigitalPeru.Infrastructure/DependencyInjection.cs`) (depende de T017, T018)
 
 ### Api
 
-- [ ] T021 [P] Registrar `AddDataProtection()` en el Composition Root
+- [X] T021 [P] Registrar `AddDataProtection()` en el Composition Root
       (`src/BancaDigitalPeru.Api/Program.cs`) (depende de T001)
-- [ ] T022 [P] Crear `TransferPreviewRequestValidator` y `ConfirmTransferRequestValidator`
+- [X] T022 [P] Crear `TransferPreviewRequestValidator` y `ConfirmTransferRequestValidator`
       (FluentValidation: GUID válido para `sourceAccountId`/`destinationAccountId`, `amount` con
       máximo 2 decimales, `Idempotency-Key` entre 1 y 255 caracteres, `previewReference` no vacío
       — plan.md "Validation Strategy") en `src/BancaDigitalPeru.Api/Validation/TransferRequestValidators.cs`
-- [ ] T023 [P] Servir el contrato `own-account-transfers-v1.yaml` como segunda fuente OpenAPI
+- [X] T023 [P] Servir el contrato `own-account-transfers-v1.yaml` como segunda fuente OpenAPI
       estática y agregarla a la configuración de Scalar en
       `src/BancaDigitalPeru.Api/OpenApi/OpenApiEndpoints.cs` (y el `Content` correspondiente en
       `BancaDigitalPeru.Api.csproj`), habilitado al menos en `Development` (plan.md "API First Strategy")
@@ -152,7 +152,7 @@ verificar que A queda en S/ 2,200.00 y B en S/ 1,100.00.
 
 ### Application
 
-- [ ] T024 [US1] Implementar `PreviewOwnAccountTransferUseCase` en
+- [X] T024 [US1] Implementar `PreviewOwnAccountTransferUseCase` en
       `src/BancaDigitalPeru.Application/Transfers/PreviewOwnAccountTransfer/PreviewOwnAccountTransferUseCase.cs`:
       resuelve el cliente actual vía `ICurrentCustomerProvider`, carga cuenta origen y destino vía
       `IAccountRepository.GetByIdForCustomerAsync`, valida propiedad (null → `AccountNotEligible`),
@@ -160,7 +160,7 @@ verificar que A queda en S/ 2,200.00 y B en S/ 1,100.00.
       importe > 0 y saldo suficiente (RB4/RB7 → `InvalidAmount`/`InsufficientFunds`); en éxito
       construye `TransferPreviewPayload` y lo protege vía `IPreviewTokenSigner.Protect` (depende
       de T009, T010, T011, T012, T018, T020)
-- [ ] T025 [US1] Implementar `ConfirmOwnAccountTransferUseCase` en
+- [X] T025 [US1] Implementar `ConfirmOwnAccountTransferUseCase` en
       `src/BancaDigitalPeru.Application/Transfers/ConfirmOwnAccountTransfer/ConfirmOwnAccountTransferUseCase.cs`:
       desprotege la referencia vía `IPreviewTokenSigner.Unprotect`, repite exactamente las mismas
       validaciones que `PreviewOwnAccountTransferUseCase` contra el estado vigente (FR-012); en
@@ -169,39 +169,39 @@ verificar que A queda en S/ 2,200.00 y B en S/ 1,100.00.
       `IUnitOfWork.SaveChangesAsync()` una única vez, produciendo `TransferResultDto` (pasos 1-8 y
       10-13 de plan.md "Application Use Case"; el paso 9, verificación de idempotencia, se agrega
       en US3) (depende de T024, T013)
-- [ ] T026 [US1] Prueba unitaria de `PreviewOwnAccountTransferUseCase` (caso exitoso: devuelve
+- [X] T026 [US1] Prueba unitaria de `PreviewOwnAccountTransferUseCase` (caso exitoso: devuelve
       referencia y los tres datos identificados, sin modificar ningún saldo) en
       `tests/BancaDigitalPeru.Application.UnitTests/Transfers/PreviewOwnAccountTransferUseCaseTests.cs`
       (depende de T024)
-- [ ] T027 [US1] Prueba unitaria de `ConfirmOwnAccountTransferUseCase` (caso exitoso: saldo origen
+- [X] T027 [US1] Prueba unitaria de `ConfirmOwnAccountTransferUseCase` (caso exitoso: saldo origen
       decrementado y destino incrementado exactamente por el importe — CA2) en
       `tests/BancaDigitalPeru.Application.UnitTests/Transfers/ConfirmOwnAccountTransferUseCaseTests.cs`
       (depende de T025)
 
 ### Api
 
-- [ ] T028 [US1] Crear los contratos de Api (`TransferPreviewRequest`, `TransferPreviewResponse`,
+- [X] T028 [US1] Crear los contratos de Api (`TransferPreviewRequest`, `TransferPreviewResponse`,
       `ConfirmTransferRequest`, `TransferResultResponse`, `MoneyResponse`) reflejando
       `own-account-transfers-v1.yaml` en `src/BancaDigitalPeru.Api/Contracts/Transfers/`
-- [ ] T029 [US1] Crear `TransferOutcomeMapping` en
+- [X] T029 [US1] Crear `TransferOutcomeMapping` en
       `src/BancaDigitalPeru.Api/ErrorHandling/TransferOutcomeMapping.cs`: mapea cada razón de
       rechazo de `TransferOutcome` a su `ProblemDetails` (404 `AccountNotEligible`; 422
       `SameAccount`/`AccountBlocked`/`InvalidAmount`/`InsufficientFunds`; 409
       `IdempotencyConflict`/`ConcurrencyConflict` — research.md §8) (depende de T012)
-- [ ] T030 [US1] Crear `TransfersController` con las acciones `POST /api/v1/transfer-previews` y
+- [X] T030 [US1] Crear `TransfersController` con las acciones `POST /api/v1/transfer-previews` y
       `POST /api/v1/transfers` en `src/BancaDigitalPeru.Api/Controllers/TransfersController.cs`
       (depende de T024, T025, T028, T029, T022)
 
 ### Pruebas de integración
 
-- [ ] T031 [US1] Prueba de integración del flujo completo vista previa → confirmación exitosa
+- [X] T031 [US1] Prueba de integración del flujo completo vista previa → confirmación exitosa
       (CA1) y transferencia por el total del saldo disponible (CL1) en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransfersEndpointTests.cs` (depende de T030, T019)
-- [ ] T032 [US1] Prueba de integración de atomicidad: forzar un fallo antes de completar
+- [X] T032 [US1] Prueba de integración de atomicidad: forzar un fallo antes de completar
       `SaveChangesAsync` y verificar que ambos saldos y la ausencia del `Transfer` quedan como
       antes del intento (RB6, sección 11 del plan) en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransferAtomicityTests.cs` (depende de T030)
-- [ ] T033 [US1] Prueba de integración de vista previa desactualizada al confirmar (FR-012):
+- [X] T033 [US1] Prueba de integración de vista previa desactualizada al confirmar (FR-012):
       cambiar el saldo de la cuenta origen entre la vista previa y la confirmación, y verificar
       que la confirmación se rechaza sin modificar ningún saldo en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransfersEndpointTests.cs` (depende de T030)
@@ -224,33 +224,33 @@ inválido devuelve el código HTTP correcto y que los saldos de ambas cuentas no
 
 ### Application
 
-- [ ] T034 [P] [US2] Prueba unitaria de `PreviewOwnAccountTransferUseCase`: cuenta origen
+- [X] T034 [P] [US2] Prueba unitaria de `PreviewOwnAccountTransferUseCase`: cuenta origen
       inexistente, cuenta destino inexistente, cuenta origen ajena, cuenta destino ajena (mismo
       resultado que inexistente — FR-022), misma cuenta, cuenta origen BLOQUEADA, cuenta destino
       BLOQUEADA (FR-006), importe ≤ 0, saldo insuficiente en
       `tests/BancaDigitalPeru.Application.UnitTests/Transfers/PreviewOwnAccountTransferUseCaseTests.cs`
       (depende de T024)
-- [ ] T035 [P] [US2] Prueba unitaria de `ConfirmOwnAccountTransferUseCase`: los mismos 9 rechazos
+- [X] T035 [P] [US2] Prueba unitaria de `ConfirmOwnAccountTransferUseCase`: los mismos 9 rechazos
       anteriores aplicados en la confirmación, verificando que ningún saldo cambia en
       `tests/BancaDigitalPeru.Application.UnitTests/Transfers/ConfirmOwnAccountTransferUseCaseTests.cs`
       (depende de T025)
 
 ### Pruebas de integración
 
-- [ ] T036 [US2] Prueba de integración: cuenta origen o destino inexistente/ajena devuelve `404`
+- [X] T036 [US2] Prueba de integración: cuenta origen o destino inexistente/ajena devuelve `404`
       (CA8, CA9, CL3, CL4); comparar explícitamente el cuerpo `ProblemDetails` de un intento con
       un GUID aleatorio inexistente contra el de un intento con una cuenta real perteneciente a
       otro cliente y verificar que son iguales (`Assert.Equal`, mismo patrón que
       `AccountsEndpointTests` de `001`) en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransfersEndpointTests.cs` (depende de T029, T030)
-- [ ] T037 [US2] Prueba de integración: importe cero/negativo (CA4, CA5), misma cuenta (CA6),
+- [X] T037 [US2] Prueba de integración: importe cero/negativo (CA4, CA5), misma cuenta (CA6),
       cuenta origen BLOQUEADA (CA7) y cuenta destino BLOQUEADA devuelven `422` con `detail`
       específico y ningún saldo cambia en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransfersEndpointTests.cs` (depende de T029, T030)
-- [ ] T038 [US2] Prueba de integración: saldo insuficiente (CA3) y cuenta con saldo cero no puede
+- [X] T038 [US2] Prueba de integración: saldo insuficiente (CA3) y cuenta con saldo cero no puede
       transferir un importe positivo (CL5) en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransfersEndpointTests.cs` (depende de T029, T030)
-- [ ] T039 [US2] Prueba de integración: importe con más de dos decimales rechazado con `400` por
+- [X] T039 [US2] Prueba de integración: importe con más de dos decimales rechazado con `400` por
       `TransferPreviewRequestValidator` (CL2) en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransfersEndpointTests.cs` (depende de T022, T030)
 
@@ -269,28 +269,28 @@ débito ni un segundo crédito.
 
 ### Application
 
-- [ ] T040 [US3] Extender `ConfirmOwnAccountTransferUseCase`: antes de `Debit`/`Credit`, buscar un
+- [X] T040 [US3] Extender `ConfirmOwnAccountTransferUseCase`: antes de `Debit`/`Credit`, buscar un
       `Transfer` existente vía `ITransferRepository.GetByIdempotencyKeyAsync`; si existe y coincide
       con los datos actuales, devolver su `TransferResultDto` (replay); si existe y no coincide,
       devolver `TransferOutcome.IdempotencyConflict` (paso 9 de plan.md "Application Use Case") en
       `src/BancaDigitalPeru.Application/Transfers/ConfirmOwnAccountTransfer/ConfirmOwnAccountTransferUseCase.cs`
       (depende de T025)
-- [ ] T041 [US3] Extender `ConfirmOwnAccountTransferUseCase`: capturar la violación de unicidad de
+- [X] T041 [US3] Extender `ConfirmOwnAccountTransferUseCase`: capturar la violación de unicidad de
       `IdempotencyKey` tras `SaveChangesAsync` (condición de carrera entre solicitudes
       concurrentes), recargar el `Transfer` ganador y devolver su resultado como replay
       (research.md §5) en el mismo archivo (depende de T040)
-- [ ] T042 [US3] Extender `ConfirmOwnAccountTransferUseCase`: capturar
+- [X] T042 [US3] Extender `ConfirmOwnAccountTransferUseCase`: capturar
       `DbUpdateConcurrencyException` tras `SaveChangesAsync` y devolver
       `TransferOutcome.ConcurrencyConflict`, sin reintento automático (research.md §6) en el mismo
       archivo (depende de T040)
-- [ ] T043 [US3] Hacer obligatorio el header `Idempotency-Key` en la acción de confirmación de
+- [X] T043 [US3] Hacer obligatorio el header `Idempotency-Key` en la acción de confirmación de
       `TransfersController` (validado por `ConfirmTransferRequestValidator`, T022) en
       `src/BancaDigitalPeru.Api/Controllers/TransfersController.cs` (depende de T030, T040)
-- [ ] T044 [US3] Prueba unitaria: replay idempotente (misma clave, mismos datos → mismo resultado)
+- [X] T044 [US3] Prueba unitaria: replay idempotente (misma clave, mismos datos → mismo resultado)
       y conflicto de idempotencia (misma clave, datos distintos → `IdempotencyConflict`) en
       `tests/BancaDigitalPeru.Application.UnitTests/Transfers/ConfirmOwnAccountTransferUseCaseTests.cs`
       (depende de T040)
-- [ ] T045 [US3] Prueba unitaria: la `IUnitOfWork` no confirma cambios ante un error simulado del
+- [X] T045 [US3] Prueba unitaria: la `IUnitOfWork` no confirma cambios ante un error simulado del
       repositorio (el doble de prueba lanza tras `Add`; verificar que ningún saldo del doble de
       `IAccountRepository` cambió) en
       `tests/BancaDigitalPeru.Application.UnitTests/Transfers/ConfirmOwnAccountTransferUseCaseTests.cs`
@@ -298,13 +298,13 @@ débito ni un segundo crédito.
 
 ### Pruebas de integración
 
-- [ ] T046 [US3] Prueba de integración: solicitud duplicada secuencial (CA10, CL6) — mismo
+- [X] T046 [US3] Prueba de integración: solicitud duplicada secuencial (CA10, CL6) — mismo
       `Idempotency-Key`, mismos datos, un único débito/crédito aplicado en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransferIdempotencyTests.cs` (depende de T043, T019)
-- [ ] T047 [US3] Prueba de integración: idempotencia concurrente — dos confirmaciones simultáneas
+- [X] T047 [US3] Prueba de integración: idempotencia concurrente — dos confirmaciones simultáneas
       con la misma `Idempotency-Key` (`Task.WhenAll`), verificar que solo una aplica el movimiento
       en `tests/BancaDigitalPeru.IntegrationTests/Api/TransferIdempotencyTests.cs` (depende de T043)
-- [ ] T048 [US3] Prueba de integración: concurrencia de saldo — dos confirmaciones simultáneas
+- [X] T048 [US3] Prueba de integración: concurrencia de saldo — dos confirmaciones simultáneas
       sobre la misma cuenta origen con importes individualmente válidos pero conjuntamente
       superiores al saldo disponible (sección 12 del plan); verificar que nunca se produce
       overspending y que como máximo una tiene éxito en
@@ -324,28 +324,28 @@ directamente y verificar que expone los 6 datos mínimos requeridos.
 
 ### Application
 
-- [ ] T049 [US4] Implementar `GetOwnAccountTransferUseCase` en
+- [X] T049 [US4] Implementar `GetOwnAccountTransferUseCase` en
       `src/BancaDigitalPeru.Application/Transfers/GetOwnAccountTransfer/GetOwnAccountTransferUseCase.cs`:
       resuelve el cliente actual, busca el `Transfer` vía
       `ITransferRepository.GetByIdForCustomerAsync`, devuelve `Result<TransferResultDto>` (mismo
       patrón `Found`/`NotFound` de `001`) (depende de T009, T013, T017, T020)
-- [ ] T050 [US4] Prueba unitaria de `GetOwnAccountTransferUseCase`: transferencia propia
+- [X] T050 [US4] Prueba unitaria de `GetOwnAccountTransferUseCase`: transferencia propia
       encontrada, inexistente, y ajena (mismo resultado que inexistente) en
       `tests/BancaDigitalPeru.Application.UnitTests/Transfers/GetOwnAccountTransferUseCaseTests.cs`
       (depende de T049)
 
 ### Api
 
-- [ ] T051 [US4] Agregar la acción `GET /api/v1/transfers/{transferId}` a `TransfersController`,
+- [X] T051 [US4] Agregar la acción `GET /api/v1/transfers/{transferId}` a `TransfersController`,
       con validación de formato del identificador y `404` genérico ante no encontrada/ajena en
       `src/BancaDigitalPeru.Api/Controllers/TransfersController.cs` (depende de T030, T049)
 
 ### Pruebas de integración
 
-- [ ] T052 [US4] Prueba de integración: consultar el resultado tras confirmar (CA11) y
+- [X] T052 [US4] Prueba de integración: consultar el resultado tras confirmar (CA11) y
       persistencia observable tras reiniciar la Api (CA12) en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransfersEndpointTests.cs` (depende de T051)
-- [ ] T053 [US4] Prueba de integración: transferencia inexistente o ajena devuelve `404` genérico
+- [X] T053 [US4] Prueba de integración: transferencia inexistente o ajena devuelve `404` genérico
       idéntico en ambos casos en `tests/BancaDigitalPeru.IntegrationTests/Api/TransfersEndpointTests.cs`
       (depende de T051)
 
@@ -356,17 +356,17 @@ independiente.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T054 [P] Prueba de conformidad OpenAPI en
+- [X] T054 [P] Prueba de conformidad OpenAPI en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransferOpenApiConformanceTests.cs`, validando
       que las respuestas reales de los 3 endpoints cumplen los schemas de
       `contracts/openapi/own-account-transfers-v1.yaml` (depende de T031, T036, T052)
-- [ ] T055 [P] Prueba de integración verificando que un error inesperado (500) durante una
+- [X] T055 [P] Prueba de integración verificando que un error inesperado (500) durante una
       confirmación nunca expone stack traces, excepciones de EF Core/Npgsql ni SQL en
       `tests/BancaDigitalPeru.IntegrationTests/Api/TransferErrorHandlingTests.cs` (depende de T030)
-- [ ] T056 Prueba adicional verificando que `Account.Balance` solo puede modificarse a través de
+- [X] T056 Prueba adicional verificando que `Account.Balance` solo puede modificarse a través de
       `Debit`/`Credit` (ninguna otra vía pública de mutación) en
       `tests/BancaDigitalPeru.Domain.UnitTests/Accounts/AccountDebitCreditTests.cs` (depende de T002)
-- [ ] T057 Ejecutar manualmente los escenarios de `quickstart.md` de extremo a extremo
+- [X] T057 Ejecutar manualmente los escenarios de `quickstart.md` de extremo a extremo
       (transferencia exitosa, saldo insuficiente, duplicidad, atomicidad, concurrencia, consulta)
       y registrar los resultados como evidencia de aceptación de la feature (depende de T031, T032,
       T033, T036, T037, T038, T039, T046, T047, T048, T052, T053)
