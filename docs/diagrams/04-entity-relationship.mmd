@@ -1,0 +1,43 @@
+%%{init: {'theme':'neutral'}}%%
+erDiagram
+    CUSTOMERS ||--o{ ACCOUNTS : "posee"
+    CUSTOMERS ||--o{ DEBIT_CARDS : "posee"
+    CUSTOMERS ||--o{ TRANSFERS : "inicia"
+    ACCOUNTS ||--o{ DEBIT_CARDS : "asociada a"
+    ACCOUNTS ||--o{ TRANSFERS : "es origen de"
+    ACCOUNTS ||--o{ TRANSFERS : "es destino de"
+
+    CUSTOMERS {
+        uuid id PK
+        varchar display_name
+    }
+    ACCOUNTS {
+        uuid id PK
+        uuid customer_id FK
+        varchar type
+        varchar number UK
+        numeric balance_amount
+        varchar balance_currency
+        varchar status
+        xid xmin "token de concurrencia"
+    }
+    DEBIT_CARDS {
+        uuid id PK
+        uuid account_id FK
+        uuid customer_id FK
+        varchar number
+        int expiration_month
+        int expiration_year
+        varchar status
+    }
+    TRANSFERS {
+        uuid id PK
+        uuid customer_id FK
+        uuid source_account_id FK
+        uuid destination_account_id FK
+        numeric amount_amount
+        varchar amount_currency
+        varchar status
+        varchar idempotency_key UK
+        timestamptz completed_at_utc
+    }

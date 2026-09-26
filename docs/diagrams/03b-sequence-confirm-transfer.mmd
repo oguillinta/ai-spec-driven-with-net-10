@@ -1,0 +1,80 @@
+%%{init: {'theme':'neutral'}}%%
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant Ctrl as TransfersController
+    participant Val as FluentValidation
+    participant UC as ConfirmTransferUseCase
+    participant Sign as IPreviewTokenSigner
+    participant Cur as ICurrentCustomerProvider
+    participant TRepo as ITransferRepository
+    participant ARepo as IAccountRepository
+    participant CRepo as ICustomerRepository
+    participant UoW as IUnitOfWork
+    participant DB as PostgreSQL
+
+    C->>Ctrl: POST /api/v1/transfers<br/>Idempotency-Key + previewReference
+    Ctrl->>Val: validar body + header
+    alt formato inválido
+        Val-->>Ctrl: errores
+        Ctrl-->>C: 400 Bad Request
+    else formato válido
+        Ctrl->>UC: ExecuteAsync(previewReference, idempotencyKey)
+        UC->>Sign: Unprotect(previewReference)
+        alt referencia no verificable
+            Sign-->>UC: null
+            UC-->>Ctrl: Rejected(InvalidPreviewReference)
+            Ctrl-->>C: 400 Bad Request
+        else referencia válida
+            Sign-->>UC: sourceAccountId, destinationAccountId, amount
+            UC->>Cur: GetCurrentCustomerIdAsync()
+            Cur-->>UC: customerId
+            UC->>TRepo: GetByIdempotencyKeyAsync(key)
+            alt ya existe una transferencia con esa clave
+                TRepo-->>UC: existingTransfer
+                alt mismo origen/destino/importe
+                    UC-->>Ctrl: Succeeded(result, isReplay=true)
+                    Ctrl-->>C: 200 OK (replay idempotente)
+                else payload distinto
+                    UC-->>Ctrl: Rejected(IdempotencyConflict)
+                    Ctrl-->>C: 409 Conflict
+                end
+            else no existe transferencia previa
+                UC->>ARepo: GetByIdForCustomerAsync(source)
+                UC->>ARepo: GetByIdAsync(destination)
+                ARepo-->>UC: sourceAccount, destinationAccount
+                Note over UC: isThirdParty = destination.CustomerId != customerId
+                UC->>UC: validar reglas (propia o tercero)
+                alt rechazada
+                    UC-->>Ctrl: Rejected(reason)
+                    Ctrl-->>C: 404 / 422
+                else aceptada
+                    UC->>UC: sourceAccount.Debit(amount)<br/>destinationAccount.Credit(amount)
+                    UC->>TRepo: Add(Transfer.Create(...))
+                    UC->>UoW: SaveChangesAsync()
+                    UoW->>DB: UPDATE accounts (chequeo xmin) + INSERT transfers
+                    alt conflicto de concurrencia (xmin no coincide)
+                        DB-->>UoW: 0 filas afectadas
+                        UoW-->>UC: ConcurrencyConflictException
+                        UC-->>Ctrl: Rejected(ConcurrencyConflict)
+                        Ctrl-->>C: 409 Conflict
+                    else otra solicitud ganó la misma Idempotency-Key
+                        DB-->>UoW: violación de índice único
+                        UoW-->>UC: UniqueConstraintViolationException
+                        UC->>TRepo: GetByIdempotencyKeyAsync(key)
+                        TRepo-->>UC: winningTransfer
+                        UC-->>Ctrl: Succeeded(result, isReplay=true)
+                        Ctrl-->>C: 200 OK (replay)
+                    else confirmado
+                        DB-->>UoW: commit
+                        opt destino pertenece a otro cliente
+                            UC->>CRepo: GetByIdAsync(destination.CustomerId)
+                            CRepo-->>UC: displayNameMasked
+                        end
+                        UC-->>Ctrl: Succeeded(result)
+                        Ctrl-->>C: 201 Created (Location)
+                    end
+                end
+            end
+        end
+    end

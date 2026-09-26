@@ -1,0 +1,72 @@
+%%{init: {'theme':'neutral'}}%%
+flowchart TB
+  subgraph F001["001 · Consulta de productos (solo lectura)"]
+    C1["AccountsController"]
+    C2["DebitCardsController"]
+    U1["ListCustomerAccountsUseCase"]
+    U2["GetCustomerAccountDetailUseCase"]
+    U3["ListCustomerDebitCardsUseCase"]
+    U4["GetCustomerDebitCardDetailUseCase"]
+  end
+
+  subgraph F002["002 · Transferencias entre cuentas propias"]
+    C3["TransfersController"]
+    U5["PreviewOwnAccountTransferUseCase"]
+    V1["OwnAccountTransferValidation"]
+  end
+
+  subgraph F003["003 · Transferencias a terceros"]
+    U6["PreviewThirdPartyTransferUseCase"]
+    V2["ThirdPartyTransferValidation"]
+  end
+
+  subgraph SHARED["Núcleo compartido 002 + 003"]
+    U7["ConfirmTransferUseCase"]
+    U8["GetTransferUseCase"]
+    V3["CommonTransferValidation"]
+    R1["IAccountRepository"]
+    R2["IDebitCardRepository"]
+    R3["ITransferRepository"]
+    R4["ICustomerRepository"]
+    R5["IUnitOfWork"]
+    R6["ICurrentCustomerProvider"]
+    R7["IPreviewTokenSigner"]
+  end
+
+  C1 --> U1
+  C1 --> U2
+  C2 --> U3
+  C2 --> U4
+  C3 --> U5
+  C3 --> U6
+  C3 --> U7
+  C3 --> U8
+  U5 --> V1
+  U6 --> V2
+  U7 --> V1
+  U7 --> V2
+  V1 --> V3
+  V2 --> V3
+  U1 --> R1
+  U2 --> R1
+  U3 --> R2
+  U4 --> R2
+  U5 --> R1
+  U6 --> R1
+  U7 --> R1
+  U7 --> R3
+  U7 --> R4
+  U7 --> R5
+  U7 --> R7
+  U5 --> R7
+  U6 --> R7
+  U8 --> R3
+
+  classDef f001 fill:#dce8f5,stroke:#1e3a5f,color:#1a2332;
+  classDef f002 fill:#fbe8d3,stroke:#c17f3e,color:#1a2332;
+  classDef f003 fill:#f6d9c9,stroke:#a8452a,color:#1a2332;
+  classDef shared fill:#dcecdd,stroke:#3f6b4a,color:#1a2332;
+  class C1,C2,U1,U2,U3,U4 f001;
+  class C3,U5,V1 f002;
+  class U6,V2 f003;
+  class U7,U8,V3,R1,R2,R3,R4,R5,R6,R7 shared;

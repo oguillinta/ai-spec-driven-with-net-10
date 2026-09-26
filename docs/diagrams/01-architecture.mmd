@@ -1,0 +1,57 @@
+%%{init: {'theme':'neutral'}}%%
+flowchart TB
+  CLIENT["HTTP client<br/>(Postman / curl, sin auth)"]
+
+  subgraph API["BancaDigitalPeru.Api — Composition Root"]
+    PROG["Program.cs"]
+    CTRL["Controllers<br/>Accounts · DebitCards · Transfers"]
+    CONTR["Contracts<br/>request/response records"]
+    VAL["FluentValidation<br/>(formato de entrada, no reglas de negocio)"]
+    ERR["ErrorHandling<br/>ProblemDetails · GlobalExceptionHandler"]
+    SERZ["Serialization<br/>UpperInvariantJsonNamingPolicy"]
+  end
+
+  subgraph APP["BancaDigitalPeru.Application"]
+    UC["Use Cases<br/>uno por capacidad, 001 / 002 / 003"]
+    PORTS["Abstractions (ports)<br/>IAccountRepository · IUnitOfWork · ICurrentCustomerProvider …"]
+  end
+
+  subgraph DOM["BancaDigitalPeru.Domain (framework-free)"]
+    ENT["Entities<br/>Customer · Account · DebitCard · Transfer"]
+    VO["Value Objects<br/>Money · AccountNumber · CardNumber · IdempotencyKey"]
+  end
+
+  subgraph INFRA["BancaDigitalPeru.Infrastructure"]
+    EFC["EF Core DbContext<br/>+ Migrations (seed incluido)"]
+    REPO["Repository implementations"]
+    OTHERINFRA["ConfiguredCurrentCustomerProvider<br/>DataProtectionPreviewTokenSigner"]
+  end
+
+  PG["PostgreSQL 17<br/>banca_digital_pe"]
+
+  CLIENT -->|"HTTP + JSON"| CTRL
+  CTRL --> CONTR
+  CTRL --> VAL
+  CTRL --> ERR
+  CTRL -->|"invoca"| UC
+  UC --> PORTS
+  UC --> ENT
+  ENT --> VO
+  REPO -.->|"implementa"| PORTS
+  OTHERINFRA -.->|"implementa"| PORTS
+  REPO --> EFC
+  EFC --> PG
+  PROG -->|"registra DI"| REPO
+  PROG -->|"registra DI"| UC
+  SERZ -.->|"configura"| CTRL
+
+  classDef api fill:#dce8f5,stroke:#1e3a5f,color:#1a2332;
+  classDef app fill:#fbe8d3,stroke:#c17f3e,color:#1a2332;
+  classDef dom fill:#f6d9c9,stroke:#a8452a,color:#1a2332;
+  classDef infra fill:#dcecdd,stroke:#3f6b4a,color:#1a2332;
+  classDef ext fill:#eee7da,stroke:#8a7f6a,color:#1a2332;
+  class PROG,CTRL,CONTR,VAL,ERR,SERZ api;
+  class UC,PORTS app;
+  class ENT,VO dom;
+  class EFC,REPO,OTHERINFRA infra;
+  class PG,CLIENT ext;

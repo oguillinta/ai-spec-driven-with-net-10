@@ -1,0 +1,20 @@
+%%{init: {'theme':'neutral'}}%%
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant Ctrl as AccountsController
+    participant UC as ListCustomerAccountsUseCase
+    participant Cur as ICurrentCustomerProvider
+    participant Repo as IAccountRepository
+    participant DB as PostgreSQL
+
+    C->>Ctrl: GET /api/v1/accounts
+    Ctrl->>UC: ExecuteAsync(ct)
+    UC->>Cur: GetCurrentCustomerIdAsync()
+    Cur-->>UC: customerId
+    UC->>Repo: GetByCustomerAsync(customerId)
+    Repo->>DB: SELECT * FROM accounts WHERE customer_id = @id
+    DB-->>Repo: filas
+    Repo-->>UC: IReadOnlyList&lt;Account&gt;
+    UC-->>Ctrl: IReadOnlyList&lt;AccountSummaryDto&gt;
+    Ctrl-->>C: 200 OK [AccountSummaryResponse]
