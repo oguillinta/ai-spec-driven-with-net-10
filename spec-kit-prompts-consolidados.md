@@ -7,6 +7,153 @@ Alcance: backend académico con tres especificaciones funcionales.
 
 ---
 
+
+# Constitución del proyecto — Banca Digital Perú
+
+## `/speckit.constitution`
+
+```text
+/speckit.constitution
+
+Crea la constitución del proyecto académico "Banca Digital Perú".
+
+El proyecto es una aplicación académica de banca digital orientada al mercado
+peruano. No procesa dinero real ni datos reales de personas: todo dato financiero,
+personal o transaccional utilizado en specs, planes, pruebas y demostraciones
+DEBE ser ficticio.
+
+La constitución debe establecer principios globales, normativos y verificables
+para todo el proyecto.
+
+Debe cubrir como mínimo los siguientes principios:
+
+1. Simplicidad ante todo.
+   - Entre dos soluciones que satisfagan correctamente los requisitos, elegir la
+     más simple.
+   - No introducir complejidad, abstracciones ni infraestructura anticipadamente.
+   - Toda complejidad adicional debe justificarse y registrarse en "Complexity Tracking".
+
+2. Especificaciones primero y alcance gobernado por ellas.
+   - Toda funcionalidad material debe seguir Specification-Driven Development:
+     spec → plan → tasks → implementation.
+   - No implementar comportamiento observable ni reglas de negocio que no estén
+     definidos en una spec aprobada.
+   - Las decisiones técnicas no deben alterar silenciosamente los requisitos.
+
+3. Mercado peruano.
+   - El producto está dirigido al mercado peruano.
+   - El texto visible para el usuario y la terminología bancaria deben utilizar
+     español de Perú.
+   - PEN es la moneda por defecto.
+   - Otras monedas solo pueden incorporarse mediante una spec explícita.
+
+4. Clean Architecture y responsabilidades separadas.
+   - Aplicar la Dependency Rule.
+   - Las reglas de negocio y casos de uso deben permanecer independientes de UI,
+     persistencia, servicios externos y frameworks.
+   - La lógica de negocio no debe residir en Infrastructure ni en mecanismos de entrega.
+
+5. Integridad financiera.
+   - Los valores monetarios deben manejarse sin pérdida de precisión.
+   - Las operaciones que modifiquen dinero deben preservar consistencia ante errores,
+     concurrencia y solicitudes duplicadas.
+   - Una solicitud repetida no debe aplicar su efecto financiero dos veces.
+   - No deben quedar estados parciales.
+   - Toda operación financiera debe ser trazable y auditable.
+
+6. Seguridad y mínimo privilegio.
+   - Un usuario solo puede consultar u operar recursos para los que está autorizado.
+   - La propiedad y autorización deben verificarse en backend.
+   - No confiar en información suministrada por el cliente para establecer autorización.
+   - Minimizar datos sensibles.
+   - No incluir secretos ni credenciales en código o logs.
+   - Utilizar exclusivamente datos ficticios.
+
+7. Comportamiento verificable.
+   - Los requisitos y criterios de aceptación deben expresarse como comportamiento
+     observable y verificable.
+   - Preferir escenarios Dado/Cuando/Entonces y criterios medibles.
+   - Las specs describen qué y por qué, no cómo.
+
+8. Calidad automatizada.
+   - Las reglas de negocio críticas y los casos de uso deben estar protegidos por
+     pruebas automatizadas.
+   - Las pruebas son obligatorias y deben aparecer como tareas.
+   - Las capas internas deben poder verificarse sin depender innecesariamente de
+     infraestructura externa.
+
+9. Decisiones técnicas justificadas.
+   - Frameworks, bases de datos, librerías, patrones adicionales a Clean Architecture
+     e infraestructura deben decidirse durante planning.
+   - No convertir decisiones tecnológicas en restricciones globales de la constitución
+     salvo que se apruebe una enmienda explícita.
+
+Usar lenguaje normativo:
+- DEBE
+- NO DEBE
+- PUEDE
+
+Cada principio debe incluir su racional.
+
+## Governance
+
+La constitución debe definir:
+
+- La constitución prevalece sobre specs, planes y tasks.
+- Ante un conflicto, el artefacto debe corregirse o la constitución debe enmendarse
+  explícitamente; nunca ignorar el conflicto.
+- Prioridad entre principios:
+  1. Integridad financiera y Seguridad.
+  2. Clean Architecture.
+  3. Simplicidad.
+- Toda enmienda debe incluir justificación.
+- Utilizar versionado semántico:
+  - MAJOR: eliminación o redefinición incompatible de un principio.
+  - MINOR: nuevo principio o ampliación material.
+  - PATCH: aclaraciones o cambios editoriales.
+- Todo plan debe ejecutar un Constitution Check antes de continuar y repetirlo
+  después del diseño.
+
+No fijar como restricciones constitucionales tecnologías concretas como:
+
+- .NET;
+- ASP.NET Core;
+- PostgreSQL;
+- Entity Framework;
+- FluentValidation;
+- xUnit;
+- UnitOfWork;
+- librerías específicas;
+
+salvo que exista una razón explícita para convertirlas en restricciones globales.
+
+Estas decisiones deben permanecer en `/speckit.plan`.
+
+Generar la constitución en español de Perú.
+
+Usar inicialmente:
+
+Version: 1.0.0
+Ratified: 2026-09-20
+Last Amended: 2026-09-20
+```
+
+Resultado consolidado de la constitución:
+
+```text
+I.   Simplicidad ante todo
+II.  Especificaciones primero y alcance gobernado por ellas
+III. Mercado peruano
+IV.  Clean Architecture y responsabilidades separadas
+V.   Integridad financiera
+VI.  Seguridad y mínimo privilegio
+VII. Comportamiento verificable
+VIII. Calidad automatizada
+IX.  Decisiones técnicas justificadas
+```
+
+---
+
 # 001 — Consulta de productos bancarios
 
 ## `/speckit.specify`
@@ -968,6 +1115,11 @@ Documentar explícitamente:
 # Resumen de secuencia utilizada
 
 ```text
+/speckit.constitution
+        ↓
+Constitución v1.0.0
+        ↓
+
 001-consulta-productos-bancarios
 /speckit.specify
         ↓
