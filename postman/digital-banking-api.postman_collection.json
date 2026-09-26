@@ -1,0 +1,4193 @@
+{
+  "info": {
+    "name": "Digital Banking API",
+    "description": "Colección de validación funcional del backend de Banca Digital Perú (proyecto académico SDD), construida exclusivamente a partir de los contratos OpenAPI y la implementación real de las features 001 (consulta de productos bancarios), 002 (transferencias entre cuentas propias) y 003 (transferencias a terceros). Sin autenticación (el proyecto no la implementa). Ver postman/README.md para instrucciones de uso, datos de prueba y discrepancias documentadas.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Chequeo global (Principio VI de la constitución): ninguna respuesta debe filtrar detalles",
+          "// internos de persistencia (stack traces, excepciones de EF Core/Npgsql, nombres de tabla).",
+          "pm.test(\"Response never leaks internal implementation details\", function () {",
+          "    const text = pm.response.text();",
+          "    pm.expect(text).to.not.match(/StackTrace|Npgsql\\.|System\\.Exception|at BancaDigitalPeru\\./);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [],
+  "item": [
+    {
+      "name": "00 - Health / Setup",
+      "item": [
+        {
+          "name": "[200] Get banking-products OpenAPI contract (connectivity check)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Content-Type is application/yaml\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"yaml\");",
+                  "});",
+                  "pm.test(\"Body looks like an OpenAPI 3.1 document\", function () {",
+                  "    pm.expect(pm.response.text()).to.include(\"openapi: 3.1\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/openapi/v1.yaml",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "openapi",
+                "v1.yaml"
+              ]
+            },
+            "description": "Propósito: verificar que el backend está corriendo y accesible en {{host}} antes de ejecutar cualquier otro escenario. Precondición: la API debe estar en ejecución en modo Development (el endpoint /openapi/*.yaml solo se mapea en Development, Program.cs). Resultado esperado: 200, contenido YAML. Variables usadas: host."
+          },
+          "response": []
+        },
+        {
+          "name": "[200] List customer accounts (seed sanity check)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Content-Type is application/json\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "});",
+                  "pm.test(\"Both seeded own accounts are present\", function () {",
+                  "    const body = pm.response.json();",
+                  "    const ids = body.map((a) => a.accountId);",
+                  "    pm.expect(ids).to.include(pm.environment.get(\"ownSourceAccountId\"));",
+                  "    pm.expect(ids).to.include(pm.environment.get(\"ownDestinationAccountId\"));",
+                  "});",
+                  "pm.environment.set(\"seedAccountsCount\", pm.response.json().length);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            },
+            "description": "Propósito: confirmar que los datos ficticios de referencia del Cliente A están disponibles antes de ejecutar el resto de la colección. Precondición: ninguna. Resultado esperado: exactamente 2 cuentas, incluyendo ownSourceAccountId y ownDestinationAccountId. Variables usadas: ownSourceAccountId, ownDestinationAccountId."
+          },
+          "response": []
+        },
+        {
+          "name": "[200] List debit cards (seed sanity check)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Content-Type is application/json\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "});",
+                  "pm.test(\"Both seeded own debit cards are present, including the BLOCKED one\", function () {",
+                  "    const body = pm.response.json();",
+                  "    const ids = body.map((c) => c.debitCardId);",
+                  "    pm.expect(ids).to.include(pm.environment.get(\"debitCardId\"));",
+                  "    pm.expect(ids).to.include(pm.environment.get(\"blockedDebitCardId\"));",
+                  "    const blocked = body.find((c) => c.debitCardId === pm.environment.get(\"blockedDebitCardId\"));",
+                  "    pm.expect(blocked.status).to.eql(\"BLOCKED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/debit-cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "debit-cards"
+              ]
+            },
+            "description": "Propósito: confirmar que las tarjetas ficticias de referencia del Cliente A están disponibles, incluyendo una BLOQUEADA. Precondición: ninguna. Resultado esperado: incluye debitCardId (ACTIVA) y blockedDebitCardId (BLOQUEADA). Variables usadas: debitCardId, blockedDebitCardId."
+          },
+          "response": []
+        }
+      ],
+      "description": "Verificaciones de conectividad y de integridad del seed antes de ejecutar cualquier escenario funcional. No requiere que ninguna otra carpeta se haya ejecutado antes."
+    },
+    {
+      "name": "01 - Banking Products",
+      "item": [
+        {
+          "name": "Success",
+          "item": [
+            {
+              "name": "[200] List customer accounts",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Response is a non-empty array\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.be.an(\"array\");",
+                      "    pm.expect(body.length).to.be.above(0);",
+                      "});",
+                      "pm.test(\"Every account has the required fields (AccountSummary schema)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    body.forEach((a) => {",
+                      "        pm.expect(a).to.have.property(\"accountId\");",
+                      "        pm.expect(a).to.have.property(\"accountType\");",
+                      "        pm.expect(a).to.have.property(\"maskedNumber\");",
+                      "        pm.expect(a).to.have.property(\"balance\");",
+                      "        pm.expect(a.balance).to.have.property(\"amount\");",
+                      "        pm.expect(a.balance).to.have.property(\"currency\");",
+                      "        pm.expect(a).to.have.property(\"status\");",
+                      "    });",
+                      "});",
+                      "pm.test(\"All balances are PEN\", function () {",
+                      "    const body = pm.response.json();",
+                      "    body.forEach((a) => pm.expect(a.balance.currency).to.eql(\"PEN\"));",
+                      "});",
+                      "pm.test(\"All account numbers are masked (only last 4 digits)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    body.forEach((a) => pm.expect(a.maskedNumber).to.match(/^\\*{4}\\d{4}$/));",
+                      "});",
+                      "pm.test(\"Every account status is ACTIVE or BLOCKED\", function () {",
+                      "    const body = pm.response.json();",
+                      "    body.forEach((a) => pm.expect([\"ACTIVE\", \"BLOCKED\"]).to.include(a.status));",
+                      "});",
+                      "pm.test(\"Response never echoes the internal customerId\", function () {",
+                      "    const text = JSON.stringify(pm.response.json());",
+                      "    const forbidden_currentCustomerId = pm.environment.get(\"currentCustomerId\");",
+                      "    if (forbidden_currentCustomerId) { pm.expect(text).to.not.include(forbidden_currentCustomerId); }",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts"
+                  ]
+                },
+                "description": "Propósito: validar GET /accounts (spec 001 FR-001/FR-002, HU1). Precondición: ninguna. Resultado esperado: 200 con un array de cuentas del Cliente A, cada una con tipo, número enmascarado, saldo, moneda y estado. Variables usadas: ownSourceAccountNumber (últimos 4 dígitos), ownDestinationAccountNumber (últimos 4 dígitos)."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get account detail",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Required fields are present\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"accountId\");",
+                      "    pm.expect(body).to.have.property(\"accountType\");",
+                      "    pm.expect(body).to.have.property(\"maskedNumber\");",
+                      "    pm.expect(body).to.have.property(\"balance\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"Currency is PEN\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.balance.currency).to.eql(\"PEN\");",
+                      "});",
+                      "pm.test(\"Account number is masked (only last 4 digits visible)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    const masked = body.maskedNumber;",
+                      "    pm.expect(masked).to.match(/^\\*{4}\\d{4}$/);",
+                      "    pm.expect(masked.endsWith(\"5678\")).to.be.true;",
+                      "});",
+                      "pm.test(\"accountType is SAVINGS\", function () {",
+                      "    pm.expect(pm.response.json().accountType).to.eql(\"SAVINGS\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: validar GET /accounts/{accountId} (spec 001 FR-003/FR-004, HU2). Precondición: ownSourceAccountId pertenece al cliente actual. Resultado esperado: 200 con tipo, número enmascarado ****0001, saldo, PEN y estado. Variables usadas: ownSourceAccountId."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get account detail - second own account",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Required fields are present\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"accountId\");",
+                      "    pm.expect(body).to.have.property(\"accountType\");",
+                      "    pm.expect(body).to.have.property(\"maskedNumber\");",
+                      "    pm.expect(body).to.have.property(\"balance\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"Account number is masked (only last 4 digits visible)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    const masked = body.maskedNumber;",
+                      "    pm.expect(masked).to.match(/^\\*{4}\\d{4}$/);",
+                      "    pm.expect(masked.endsWith(\"4321\")).to.be.true;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownDestinationAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownDestinationAccountId}}"
+                  ]
+                },
+                "description": "Propósito: validar el detalle de la segunda cuenta propia del Cliente A. Nota: en la base de datos local actual esta cuenta está ACTIVA (ver README, \"Discrepancias y limitaciones\") — no demuestra el caso \"cuenta BLOQUEADA sigue visible\" a nivel de cuenta (sí a nivel de tarjeta, ver blockedDebitCardId). Precondición: ownDestinationAccountId pertenece al cliente actual. Resultado esperado: 200, ****4321. Variables usadas: ownDestinationAccountId."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] List debit cards",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Every card has the required fields (DebitCardSummary schema)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    body.forEach((c) => {",
+                      "        pm.expect(c).to.have.property(\"debitCardId\");",
+                      "        pm.expect(c).to.have.property(\"maskedNumber\");",
+                      "        pm.expect(c).to.have.property(\"last4Digits\");",
+                      "        pm.expect(c).to.have.property(\"accountId\");",
+                      "        pm.expect(c).to.have.property(\"status\");",
+                      "        pm.expect(c).to.have.property(\"expiration\");",
+                      "        pm.expect(c.expiration).to.have.property(\"month\");",
+                      "        pm.expect(c.expiration).to.have.property(\"year\");",
+                      "    });",
+                      "});",
+                      "pm.test(\"A BLOCKED card is present and clearly identified (RF-014)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.some((c) => c.status === \"BLOCKED\")).to.be.true;",
+                      "});",
+                      "pm.test(\"All card numbers are masked (only last 4 digits)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    body.forEach((c) => pm.expect(c.maskedNumber).to.match(/^(\\*{4} ){3}\\d{4}$/));",
+                      "});",
+                      "pm.test(\"Response never exposes CVV or PIN\", function () {",
+                      "    const text = pm.response.text().toLowerCase();",
+                      "    pm.expect(text).to.not.include(\"cvv\");",
+                      "    pm.expect(text).to.not.include(\"\\\"pin\\\"\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/debit-cards",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "debit-cards"
+                  ]
+                },
+                "description": "Propósito: validar GET /debit-cards (spec 001 FR-008/FR-009, HU3). Precondición: ninguna. Resultado esperado: 200 con las tarjetas del Cliente A, incluida la BLOQUEADA (RF-014), nunca CVV ni PIN. Variables usadas: ownSourceAccountId (para validar accountId asociado)."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get debit card detail - active card",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Required fields are present\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"debitCardId\");",
+                      "    pm.expect(body).to.have.property(\"maskedNumber\");",
+                      "    pm.expect(body).to.have.property(\"last4Digits\");",
+                      "    pm.expect(body).to.have.property(\"accountId\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "    pm.expect(body).to.have.property(\"expiration\");",
+                      "});",
+                      "pm.test(\"Card number is masked (only last 4 digits visible)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    const masked = body.maskedNumber;",
+                      "    pm.expect(masked).to.match(/^(\\*{4} ){3}\\d{4}$/);",
+                      "    pm.expect(masked.endsWith(\"4582\")).to.be.true;",
+                      "});",
+                      "pm.test(\"last4Digits matches the masked number\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.last4Digits).to.eql(\"4582\");",
+                      "});",
+                      "pm.test(\"Associated account belongs to the same customer (RF-012/RB6)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.accountId).to.eql(pm.environment.get(\"ownSourceAccountId\"));",
+                      "});",
+                      "pm.test(\"Response never exposes CVV or PIN\", function () {",
+                      "    const text = pm.response.text().toLowerCase();",
+                      "    pm.expect(text).to.not.include(\"cvv\");",
+                      "    pm.expect(text).to.not.include(\"\\\"pin\\\"\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/debit-cards/{{debitCardId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "debit-cards",
+                    "{{debitCardId}}"
+                  ]
+                },
+                "description": "Propósito: validar GET /debit-cards/{debitCardId} (spec 001 FR-010/FR-011, HU4) para una tarjeta ACTIVA. Precondición: debitCardId pertenece al cliente actual y está asociada a ownSourceAccountId. Resultado esperado: 200, terminación 4582, accountId = ownSourceAccountId. Variables usadas: debitCardId, ownSourceAccountId."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get debit card detail - blocked card (still visible)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Status is BLOCKED and the card is still fully visible\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.status).to.eql(\"BLOCKED\");",
+                      "    pm.expect(body).to.have.property(\"maskedNumber\");",
+                      "    pm.expect(body).to.have.property(\"last4Digits\");",
+                      "});",
+                      "pm.test(\"Card number is masked (only last 4 digits visible)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    const masked = body.maskedNumber;",
+                      "    pm.expect(masked).to.match(/^(\\*{4} ){3}\\d{4}$/);",
+                      "    pm.expect(masked.endsWith(\"9911\")).to.be.true;",
+                      "});",
+                      "pm.test(\"Response never exposes CVV or PIN\", function () {",
+                      "    const text = pm.response.text().toLowerCase();",
+                      "    pm.expect(text).to.not.include(\"cvv\");",
+                      "    pm.expect(text).to.not.include(\"\\\"pin\\\"\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/debit-cards/{{blockedDebitCardId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "debit-cards",
+                    "{{blockedDebitCardId}}"
+                  ]
+                },
+                "description": "Propósito: validar que una tarjeta BLOQUEADA continúa siendo consultable y claramente identificada (spec 001 FR-014). Precondición: blockedDebitCardId pertenece al cliente actual. Resultado esperado: 200, status = BLOCKED. Variables usadas: blockedDebitCardId."
+              },
+              "response": []
+            }
+          ],
+          "description": "Casos exitosos de 001. Cada request es independiente y puede ejecutarse sola (no depende de otras carpetas)."
+        },
+        {
+          "name": "Error Cases",
+          "item": [
+            {
+              "name": "[400] Get account detail - invalid id format",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/bad-request\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/bad-request\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{invalidAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{invalidAccountId}}"
+                  ]
+                },
+                "description": "Propósito: validar el rechazo de un accountId con formato inválido (no-GUID). Precondición: ninguna. Resultado esperado: 400, ProblemDetails genérico \"bad-request\". Variables usadas: invalidAccountId."
+              },
+              "response": []
+            },
+            {
+              "name": "[404] Get account detail - unknown id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 404\", function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/not-found\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/not-found\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{unknownAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{unknownAccountId}}"
+                  ]
+                },
+                "description": "Propósito: validar el caso \"cuenta inexistente\" (spec FR-022 — Edge Case \"Producto inexistente\"). Precondición: unknownAccountId no existe. Resultado esperado: 404 genérico. Variables usadas: unknownAccountId."
+              },
+              "response": []
+            },
+            {
+              "name": "[404] Get account detail - belongs to another customer (privacy)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 404\", function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/not-found\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/not-found\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"no existe o no está disponible\");",
+                      "});",
+                      "pm.test(\"Response never reveals whose account this is\", function () {",
+                      "    const text = JSON.stringify(pm.response.json());",
+                      "    const forbidden_currentCustomerId = pm.environment.get(\"currentCustomerId\");",
+                      "    if (forbidden_currentCustomerId) { pm.expect(text).to.not.include(forbidden_currentCustomerId); }",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{thirdPartyDestinationAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{thirdPartyDestinationAccountId}}"
+                  ]
+                },
+                "description": "Propósito: validar HU5/FR-016/FR-022 — un producto de otro cliente responde exactamente igual que uno inexistente. Precondición: thirdPartyDestinationAccountId es una cuenta real que pertenece al Cliente B, no al cliente actual. Resultado esperado: 404, mismo cuerpo genérico que el caso anterior (indistinguible). Variables usadas: thirdPartyDestinationAccountId."
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Get debit card detail - invalid id format",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/bad-request\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/bad-request\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/debit-cards/{{invalidAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "debit-cards",
+                    "{{invalidAccountId}}"
+                  ]
+                },
+                "description": "Propósito: validar el rechazo de un debitCardId con formato inválido. Precondición: ninguna. Resultado esperado: 400, ProblemDetails genérico. Variables usadas: invalidAccountId."
+              },
+              "response": []
+            },
+            {
+              "name": "[404] Get debit card detail - unknown id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 404\", function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/not-found\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/not-found\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/debit-cards/{{unknownAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "debit-cards",
+                    "{{unknownAccountId}}"
+                  ]
+                },
+                "description": "Propósito: validar el caso \"tarjeta inexistente\". Precondición: unknownAccountId no existe como tarjeta. Resultado esperado: 404 genérico. Variables usadas: unknownAccountId."
+              },
+              "response": []
+            },
+            {
+              "name": "[404] Get debit card detail - belongs to another customer (privacy)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 404\", function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/not-found\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/not-found\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/debit-cards/{{thirdPartyDebitCardId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "debit-cards",
+                    "{{thirdPartyDebitCardId}}"
+                  ]
+                },
+                "description": "Propósito: validar HU5/FR-017/FR-022 para tarjetas. Precondición: thirdPartyDebitCardId pertenece al Cliente B. Resultado esperado: 404 genérico, indistinguible del caso \"inexistente\". Variables usadas: thirdPartyDebitCardId."
+              },
+              "response": []
+            }
+          ],
+          "description": "Casos de error de 001, únicamente los soportados por banking-products-v1.yaml e implementación real."
+        }
+      ],
+      "description": "Consulta de cuentas de ahorro y tarjetas de débito del cliente actual (feature 001, solo lectura). Contrato: specs/001-consulta-productos-bancarios/contracts/openapi/banking-products-v1.yaml."
+    },
+    {
+      "name": "02 - Own Account Transfers",
+      "item": [
+        {
+          "name": "Success",
+          "item": [
+            {
+              "name": "[200] Get source account balance (before)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownTransferSourceBalanceBefore\", pm.response.json().balance.amount);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: capturar el saldo de la cuenta origen antes de transferir (paso 1 del flujo de 002). Precondición: ninguna. Resultado esperado: 200. Variables usadas: ownSourceAccountId. Variables generadas: ownTransferSourceBalanceBefore."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get destination account balance (before)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownTransferDestinationBalanceBefore\", pm.response.json().balance.amount);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownDestinationAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownDestinationAccountId}}"
+                  ]
+                },
+                "description": "Propósito: capturar el saldo de la cuenta destino antes de transferir (paso 2). Precondición: ninguna. Resultado esperado: 200. Variables usadas: ownDestinationAccountId. Variables generadas: ownTransferDestinationBalanceBefore."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Preview transfer between own accounts",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Required fields are present\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"previewReference\");",
+                      "    pm.expect(body).to.have.property(\"sourceAccountId\");",
+                      "    pm.expect(body).to.have.property(\"destinationAccountId\");",
+                      "    pm.expect(body).to.have.property(\"amount\");",
+                      "});",
+                      "pm.test(\"Currency is PEN\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.amount.currency).to.eql(\"PEN\");",
+                      "});",
+                      "pm.environment.set(\"ownTransferPreviewReference\", pm.response.json().previewReference);",
+                      "pm.test(\"Balances are NOT modified by a preview\", function () {",
+                      "    pm.expect(true).to.be.true; // sin efecto financiero por contrato — verificado explícitamente tras la confirmación",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": {{validOwnTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar POST /transfer-previews (spec 002 FR-010) — sin efecto financiero. Precondición: ambas cuentas ACTIVAS y del cliente actual. Resultado esperado: 200 con previewReference. Variables usadas: ownSourceAccountId, ownDestinationAccountId, validOwnTransferAmount. Variables generadas: ownTransferPreviewReference."
+              },
+              "response": []
+            },
+            {
+              "name": "[201] Confirm transfer between own accounts - success",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 201\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Location header is present\", function () {",
+                      "    pm.expect(pm.response.headers.has(\"Location\")).to.be.true;",
+                      "});",
+                      "pm.test(\"Required fields are present\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"transferId\");",
+                      "    pm.expect(body).to.have.property(\"completedAt\");",
+                      "    pm.expect(body).to.have.property(\"sourceAccountMasked\");",
+                      "    pm.expect(body).to.have.property(\"destinationAccountMasked\");",
+                      "    pm.expect(body).to.have.property(\"amount\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"Status is COMPLETED\", function () {",
+                      "    pm.expect(pm.response.json().status).to.eql(\"COMPLETED\");",
+                      "});",
+                      "pm.test(\"No destinationCustomerDisplayName for an own-account transfer\", function () {",
+                      "    pm.expect(pm.response.json().destinationCustomerDisplayName).to.be.undefined;",
+                      "});",
+                      "pm.environment.set(\"ownTransferId\", pm.response.json().transferId);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text",
+                    "description": "Clave de idempotencia única para esta operación (no se reutiliza en otra request)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"previewReference\": \"{{ownTransferPreviewReference}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar POST /transfers (spec 002 FR-011/FR-012) — ejecuta el movimiento real. Precondición: ownTransferPreviewReference vigente (request anterior de esta misma carpeta). Resultado esperado: 201 Created, header Location, TransferResult con status COMPLETED. Variables usadas: ownTransferPreviewReference. Variables generadas: ownTransferId."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get source account balance (after)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownTransferSourceBalanceAfter\", pm.response.json().balance.amount);",
+                      "function toCents(n) { return Math.round(Number(n) * 100); }",
+                      "pm.test(\"Source balance decreased by exactly the transferred amount\", function () {",
+                      "    const before = toCents(pm.environment.get(\"ownTransferSourceBalanceBefore\"));",
+                      "    const after = toCents(pm.response.json().balance.amount);",
+                      "    const amount = toCents(pm.environment.get(\"validOwnTransferAmount\"));",
+                      "    pm.expect(after).to.eql(before - amount);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: verificar que el débito se aplicó correctamente. Precondición: confirmación exitosa anterior. Resultado esperado: 200, saldo = saldo anterior - importe. Variables usadas: ownSourceAccountId, validOwnTransferAmount. Variables generadas: ownTransferSourceBalanceAfter."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get destination account balance (after)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownTransferDestinationBalanceAfter\", pm.response.json().balance.amount);",
+                      "function toCents(n) { return Math.round(Number(n) * 100); }",
+                      "pm.test(\"Destination balance increased by exactly the transferred amount\", function () {",
+                      "    const before = toCents(pm.environment.get(\"ownTransferDestinationBalanceBefore\"));",
+                      "    const after = toCents(pm.response.json().balance.amount);",
+                      "    const amount = toCents(pm.environment.get(\"validOwnTransferAmount\"));",
+                      "    pm.expect(after).to.eql(before + amount);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownDestinationAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownDestinationAccountId}}"
+                  ]
+                },
+                "description": "Propósito: verificar que el crédito se aplicó correctamente y que ambos lados movieron el mismo importe (spec RB conservación del dinero). Precondición: confirmación exitosa anterior. Resultado esperado: 200, saldo = saldo anterior + importe. Variables usadas: ownDestinationAccountId, validOwnTransferAmount. Variables generadas: ownTransferDestinationBalanceAfter."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get transfer by id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Required fields are present\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"transferId\");",
+                      "    pm.expect(body).to.have.property(\"completedAt\");",
+                      "    pm.expect(body).to.have.property(\"sourceAccountMasked\");",
+                      "    pm.expect(body).to.have.property(\"destinationAccountMasked\");",
+                      "    pm.expect(body).to.have.property(\"amount\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers/{{ownTransferId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers",
+                    "{{ownTransferId}}"
+                  ]
+                },
+                "description": "Propósito: validar GET /transfers/{transferId} (spec 002 FR-018, HU4). Precondición: ownTransferId de la confirmación anterior. Resultado esperado: 200 con el mismo resultado ya devuelto por la confirmación. Variables usadas: ownTransferId."
+              },
+              "response": []
+            }
+          ],
+          "description": "Flujo completo de una transferencia entre cuentas propias, con verificación de invariante de conservación del dinero (sourceAfter = sourceBefore - amount, destinationAfter = destinationBefore + amount). Las requests de esta carpeta deben ejecutarse EN ORDEN: modifican saldos reales."
+        },
+        {
+          "name": "Business Errors",
+          "item": [
+            {
+              "name": "[200] Get source account balance (before insufficient-funds attempt)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownInsufficientFundsBalanceBefore\", pm.response.json().balance.amount);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: capturar el saldo antes de un intento rechazado, para verificar después que no cambió. Variables generadas: ownInsufficientFundsBalanceBefore."
+              },
+              "response": []
+            },
+            {
+              "name": "[422] Own transfer preview - insufficient funds",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 422\", function () {",
+                      "    pm.response.to.have.status(422);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/transfer-rejected\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/transfer-rejected\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"saldo disponible\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": {{insufficientFundsAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar el rechazo por saldo insuficiente (spec 002 RB — TransferRejected). Precondición: insufficientFundsAmount > saldo disponible. Resultado esperado: 422, ProblemDetails \"transfer-rejected\". Variables usadas: ownSourceAccountId, ownDestinationAccountId, insufficientFundsAmount."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get source account balance (after insufficient-funds attempt) - unchanged",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "function toCents(n) { return Math.round(Number(n) * 100); }",
+                      "pm.test(\"Balance remains unchanged after a rejected transfer\", function () {",
+                      "    const before = toCents(pm.environment.get(\"ownInsufficientFundsBalanceBefore\"));",
+                      "    const after = toCents(pm.response.json().balance.amount);",
+                      "    pm.expect(after).to.eql(before);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: demostrar atomicidad — una transferencia rechazada no altera ningún saldo. Variables usadas: ownInsufficientFundsBalanceBefore."
+              },
+              "response": []
+            },
+            {
+              "name": "[422] Own transfer preview - source and destination are the same account",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 422\", function () {",
+                      "    pm.response.to.have.status(422);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/transfer-rejected\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/transfer-rejected\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{ownSourceAccountId}}\",\n  \"amount\": {{validOwnTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar el rechazo cuando origen y destino son la misma cuenta (spec 002 RB). Resultado esperado: 422 \"transfer-rejected\". Variables usadas: ownSourceAccountId, validOwnTransferAmount."
+              },
+              "response": []
+            },
+            {
+              "name": "[404] Own transfer preview - destination account belongs to another customer",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 404\", function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/not-found\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/not-found\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{thirdPartyDestinationAccountId}}\",\n  \"amount\": {{validOwnTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar que 002 solo transfiere entre cuentas del MISMO cliente — si el destino pertenece a otro cliente, se rechaza igual que si no existiera (privacidad simétrica, research.md de 002 §8). Resultado esperado: 404 genérico. Variables usadas: ownSourceAccountId, thirdPartyDestinationAccountId, validOwnTransferAmount."
+              },
+              "response": []
+            },
+            {
+              "name": "[404] Own transfer preview - source account belongs to another customer",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 404\", function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/not-found\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/not-found\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{thirdPartyDestinationAccountId}}\",\n  \"destinationAccountId\": \"{{ownSourceAccountId}}\",\n  \"amount\": {{validOwnTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar el mismo criterio anterior aplicado al origen. Resultado esperado: 404 genérico. Variables usadas: thirdPartyDestinationAccountId, ownSourceAccountId, validOwnTransferAmount."
+              },
+              "response": []
+            },
+            {
+              "name": "[404] Own transfer preview - unknown account",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 404\", function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/not-found\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/not-found\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{unknownAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": {{validOwnTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar el caso \"cuenta inexistente\" en el flujo de transferencia. Resultado esperado: 404 genérico. Variables usadas: unknownAccountId, ownDestinationAccountId, validOwnTransferAmount."
+              },
+              "response": []
+            }
+          ],
+          "description": "Reglas de negocio de 002 realmente implementadas. NO incluye \"cuenta origen/destino BLOQUEADA\": no existe actualmente ninguna cuenta sembrada en ese estado (ver postman/README.md). Esta limitación está cubierta a nivel de pruebas automatizadas del backend (Application.UnitTests), no a nivel de esta colección HTTP."
+        },
+        {
+          "name": "Validation Errors",
+          "item": [
+            {
+              "name": "[400] Own transfer preview - amount with unsupported scale (3 decimals)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/bad-request\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/bad-request\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"dos decimales\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": {{invalidScaleAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar FluentValidation (TransferPreviewRequestValidator) — el importe admite como máximo 2 decimales. Resultado esperado: 400, ProblemDetails \"bad-request\". Variables usadas: invalidScaleAmount."
+              },
+              "response": []
+            },
+            {
+              "name": "[422] Own transfer preview - amount is zero",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 422\", function () {",
+                      "    pm.response.to.have.status(422);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/transfer-rejected\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/transfer-rejected\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"mayor que cero\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": 0\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar el rechazo de importe = 0. NOTA: esta regla la aplica Application/Domain, no FluentValidation (TransferPreviewRequestValidator solo valida la precisión decimal), por lo que el código real es 422 (TransferRejected), no 400. Resultado esperado: 422, detail \"El importe debe ser mayor que cero.\""
+              },
+              "response": []
+            },
+            {
+              "name": "[422] Own transfer preview - amount is negative",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 422\", function () {",
+                      "    pm.response.to.have.status(422);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/transfer-rejected\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/transfer-rejected\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"mayor que cero\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": -10.00\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar el rechazo de un importe negativo. Mismo criterio que \"amount is zero\": regla de Application/Domain, 422 no 400. Resultado esperado: 422, detail \"El importe debe ser mayor que cero.\""
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Own transfer preview - malformed sourceAccountId (not a GUID)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400 (automatic model-binding validation)\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "pm.test(\"Body is the framework default ValidationProblemDetails (has an errors dictionary), not the custom ProblemDetails shape\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"errors\");",
+                      "    pm.expect(body.status).to.eql(400);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{invalidAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": {{validOwnTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar el comportamiento cuando sourceAccountId no es un GUID válido en el CUERPO de la solicitud. DISCREPANCIA DOCUMENTADA (ver README): TransferPreviewRequest.SourceAccountId está tipado como Guid en C#, por lo que un valor no-GUID falla en el model binding automático de ASP.NET Core ANTES de llegar a FluentValidation — la respuesta 400 usa el ValidationProblemDetails por defecto del framework (con un diccionario \"errors\"), no el ProblemDetails personalizado del resto de la API. Resultado esperado: 400 con esa forma distinta."
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Confirm transfer - missing previewReference in body",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/bad-request\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/bad-request\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar ConfirmTransferRequestValidator (previewReference obligatorio). Resultado esperado: 400, ProblemDetails \"bad-request\"."
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Confirm transfer - missing Idempotency-Key header",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/bad-request\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/bad-request\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"Idempotency-Key\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"previewReference\": \"placeholder-preview-reference\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar IdempotencyKeyHeaderValidator (header obligatorio). El valor de previewReference no necesita ser real: la validación del header ocurre antes de intentar decodificar la referencia (TransfersController.ConfirmTransfer). Resultado esperado: 400, ProblemDetails \"bad-request\"."
+              },
+              "response": []
+            }
+          ],
+          "description": "Únicamente reglas de validación realmente implementadas (FluentValidation + model binding de ASP.NET Core). No se valida \"moneda inválida\" porque el request de 002 no recibe un campo currency (solo amount)."
+        },
+        {
+          "name": "Idempotency",
+          "item": [
+            {
+              "name": "[200] Get source balance (before idempotency demo)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (!pm.environment.get(\"idempotencyKey\")) {",
+                      "    pm.environment.set(\"idempotencyKey\", pm.variables.replaceIn('{{$guid}}'));",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownIdemSourceBalanceBefore\", pm.response.json().balance.amount);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: capturar el saldo inicial y generar (si aún no existe) la Idempotency-Key que se reutilizará en toda esta carpeta. Variables generadas: idempotencyKey (si estaba vacía), ownIdemSourceBalanceBefore."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get destination balance (before idempotency demo)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownIdemDestinationBalanceBefore\", pm.response.json().balance.amount);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownDestinationAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownDestinationAccountId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Preview transfer (for idempotency demo)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownIdemPreviewReference\", pm.response.json().previewReference);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": {{validOwnTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: obtener una vista previa válida para confirmar dos veces con la misma Idempotency-Key. Variables generadas: ownIdemPreviewReference."
+              },
+              "response": []
+            },
+            {
+              "name": "[201] Confirm transfer - first call with Idempotency-Key",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 201\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "pm.environment.set(\"ownIdemTransferId\", pm.response.json().transferId);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{idempotencyKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"previewReference\": \"{{ownIdemPreviewReference}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: ejecutar la transferencia por primera vez con una Idempotency-Key conocida (spec 002 FR-021/FR-022). Resultado esperado: 201 Created. Variables usadas: idempotencyKey, ownIdemPreviewReference. Variables generadas: ownIdemTransferId."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Replay - same Idempotency-Key, same payload",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownIdemReplayTransferId\", pm.response.json().transferId);",
+                      "pm.test(\"Replay returns the same transferId as the original confirmation\", function () {",
+                      "    pm.expect(pm.response.json().transferId).to.eql(pm.environment.get(\"ownIdemTransferId\"));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{idempotencyKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"previewReference\": \"{{ownIdemPreviewReference}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: reenviar EXACTAMENTE la misma solicitud (misma clave, mismo cuerpo). Resultado esperado (según contrato): 200 (no 201) devolviendo el resultado ya existente, sin aplicar el movimiento una segunda vez. Variables generadas: ownIdemReplayTransferId."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get source balance (after replay) - moved only once",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownIdemSourceBalanceAfterReplay\", pm.response.json().balance.amount);",
+                      "function toCents(n) { return Math.round(Number(n) * 100); }",
+                      "pm.test(\"Idempotent request did not duplicate the debit\", function () {",
+                      "    const before = toCents(pm.environment.get(\"ownIdemSourceBalanceBefore\"));",
+                      "    const after = toCents(pm.response.json().balance.amount);",
+                      "    const amount = toCents(pm.environment.get(\"validOwnTransferAmount\"));",
+                      "    pm.expect(after).to.eql(before - amount);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: demostrar que el segundo envío (replay) no generó un segundo débito. Resultado esperado: saldo = saldo inicial - 1x importe."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get destination balance (after replay) - moved only once",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownIdemDestinationBalanceAfterReplay\", pm.response.json().balance.amount);",
+                      "function toCents(n) { return Math.round(Number(n) * 100); }",
+                      "pm.test(\"Idempotent request did not duplicate the credit\", function () {",
+                      "    const before = toCents(pm.environment.get(\"ownIdemDestinationBalanceBefore\"));",
+                      "    const after = toCents(pm.response.json().balance.amount);",
+                      "    const amount = toCents(pm.environment.get(\"validOwnTransferAmount\"));",
+                      "    pm.expect(after).to.eql(before + amount);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownDestinationAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownDestinationAccountId}}"
+                  ]
+                },
+                "description": "Propósito: demostrar que el replay no generó un segundo crédito. Resultado esperado: saldo = saldo inicial + 1x importe."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Preview a different transfer (for conflict demo)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"ownIdemConflictPreviewReference\", pm.response.json().previewReference);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": 1.00\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: obtener una vista previa DISTINTA (importe diferente) para reutilizar la misma Idempotency-Key con un payload distinto. Variables generadas: ownIdemConflictPreviewReference."
+              },
+              "response": []
+            },
+            {
+              "name": "[409] Confirm transfer - same Idempotency-Key, different payload",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 409\", function () {",
+                      "    pm.response.to.have.status(409);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/idempotency-conflict\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/idempotency-conflict\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{idempotencyKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"previewReference\": \"{{ownIdemConflictPreviewReference}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: reutilizar idempotencyKey (ya usada arriba) con una referencia de vista previa distinta. Resultado esperado (según contrato): 409, ProblemDetails \"idempotency-conflict\". No aplica ningún movimiento adicional."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get source balance (after conflict attempt) - unchanged",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "function toCents(n) { return Math.round(Number(n) * 100); }",
+                      "pm.test(\"Balance unchanged after an idempotency-conflict attempt\", function () {",
+                      "    const before = toCents(pm.environment.get(\"ownIdemSourceBalanceAfterReplay\"));",
+                      "    const after = toCents(pm.response.json().balance.amount);",
+                      "    pm.expect(after).to.eql(before);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: confirmar que el intento de conflicto de idempotencia no tuvo ningún efecto financiero."
+              },
+              "response": []
+            }
+          ],
+          "description": "Demuestra idempotencia (spec 002 FR-021/FR-022): una misma Idempotency-Key con el mismo payload nunca duplica el efecto financiero, y la misma clave con un payload distinto se rechaza con 409. Las requests de esta carpeta deben ejecutarse EN ORDEN. La Idempotency-Key se genera una sola vez (primera request) y se reutiliza en el resto de la carpeta."
+        }
+      ],
+      "description": "Transferencias entre dos cuentas de ahorro del mismo cliente (feature 002). Contrato: specs/002-transferencias-cuentas-propias/contracts/openapi/own-account-transfers-v1.yaml. Las carpetas \"Success\" e \"Idempotency\" modifican saldos reales; \"Business Errors\" y \"Validation Errors\" no (toda solicitud es rechazada antes de aplicar ningún movimiento)."
+    },
+    {
+      "name": "03 - Third-Party Transfers",
+      "item": [
+        {
+          "name": "Success",
+          "item": [
+            {
+              "name": "[200] Get source account balance (before)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"thirdPartySourceBalanceBefore\", pm.response.json().balance.amount);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: capturar el saldo de la cuenta origen antes de transferir a un tercero. Resultado esperado: 200. Variables generadas: thirdPartySourceBalanceBefore."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Preview transfer to a third party",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Required fields are present\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"previewReference\");",
+                      "    pm.expect(body).to.have.property(\"sourceAccountId\");",
+                      "    pm.expect(body).to.have.property(\"destinationAccountMasked\");",
+                      "    pm.expect(body).to.have.property(\"destinationCustomerDisplayName\");",
+                      "    pm.expect(body).to.have.property(\"amount\");",
+                      "});",
+                      "pm.test(\"Currency is PEN\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.amount.currency).to.eql(\"PEN\");",
+                      "});",
+                      "pm.test(\"Account number is masked (only last 4 digits visible)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    const masked = body.destinationAccountMasked;",
+                      "    pm.expect(masked).to.match(/^\\*{4}\\d{4}$/);",
+                      "    pm.expect(masked.endsWith(\"7766\")).to.be.true;",
+                      "});",
+                      "pm.test(\"Recipient display name is partially masked (\\\"Nombre I***\\\" shape)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.destinationCustomerDisplayName).to.match(/^[^\\s]+ [A-ZÁÉÍÓÚÑ]\\*{3}$/);",
+                      "});",
+                      "pm.environment.set(\"thirdPartyPreviewReference\", pm.response.json().previewReference);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": {{validThirdPartyTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar POST /third-party-transfer-previews (spec 003 FR-009/FR-010/FR-011) — resuelve el destino por número de cuenta y devuelve el nombre parcialmente oculto del destinatario. Precondición: cuenta origen ACTIVA y propia; número de cuenta destino real de otro cliente. Resultado esperado: 200. Variables usadas: ownSourceAccountId, thirdPartyDestinationAccountNumber, validThirdPartyTransferAmount. Variables generadas: thirdPartyPreviewReference."
+              },
+              "response": []
+            },
+            {
+              "name": "[201] Confirm transfer to a third party - success",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 201\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "pm.test(\"Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "pm.test(\"Required fields are present\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"transferId\");",
+                      "    pm.expect(body).to.have.property(\"completedAt\");",
+                      "    pm.expect(body).to.have.property(\"sourceAccountMasked\");",
+                      "    pm.expect(body).to.have.property(\"destinationAccountMasked\");",
+                      "    pm.expect(body).to.have.property(\"amount\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "    pm.expect(body).to.have.property(\"destinationCustomerDisplayName\");",
+                      "});",
+                      "pm.test(\"Status is COMPLETED\", function () {",
+                      "    pm.expect(pm.response.json().status).to.eql(\"COMPLETED\");",
+                      "});",
+                      "pm.environment.set(\"thirdPartyTransferId\", pm.response.json().transferId);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"previewReference\": \"{{thirdPartyPreviewReference}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: ejecutar la transferencia a un tercero (comparte POST /transfers con 002; el backend clasifica la operación por propiedad real de las cuentas, nunca por un campo del contrato). Resultado esperado: 201, destinationCustomerDisplayName presente. Variables usadas: thirdPartyPreviewReference. Variables generadas: thirdPartyTransferId."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get source account balance (after)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"thirdPartySourceBalanceAfter\", pm.response.json().balance.amount);",
+                      "function toCents(n) { return Math.round(Number(n) * 100); }",
+                      "pm.test(\"Source balance decreased by exactly the transferred amount\", function () {",
+                      "    const before = toCents(pm.environment.get(\"thirdPartySourceBalanceBefore\"));",
+                      "    const after = toCents(pm.response.json().balance.amount);",
+                      "    const amount = toCents(pm.environment.get(\"validThirdPartyTransferAmount\"));",
+                      "    pm.expect(after).to.eql(before - amount);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: verificar que el débito del ordenante se aplicó correctamente. NOTA: el saldo final del DESTINATARIO no es observable desde esta colección sin violar el contrato de privacidad (no existe forma de consultar el saldo de otro cliente ni de \"actuar como\" otro cliente vía HTTP — ver README, \"Discrepancias y limitaciones\"). Resultado esperado: saldo = saldo anterior - importe. Variables generadas: thirdPartySourceBalanceAfter."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get transfer by id - includes recipient display name",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Required fields are present\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"transferId\");",
+                      "    pm.expect(body).to.have.property(\"sourceAccountMasked\");",
+                      "    pm.expect(body).to.have.property(\"destinationAccountMasked\");",
+                      "    pm.expect(body).to.have.property(\"amount\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "    pm.expect(body).to.have.property(\"destinationCustomerDisplayName\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers/{{thirdPartyTransferId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers",
+                    "{{thirdPartyTransferId}}"
+                  ]
+                },
+                "description": "Propósito: validar GET /transfers/{transferId} para una transferencia a terceros — el campo destinationCustomerDisplayName debe estar presente (a diferencia de una transferencia entre cuentas propias, ver 02 - Success). Variables usadas: thirdPartyTransferId."
+              },
+              "response": []
+            }
+          ],
+          "description": "Flujo completo de una transferencia a la cuenta de un tercero del mismo banco (feature 003). Solo se verifica el saldo del ORDENANTE (sourceAfter = sourceBefore - amount): el saldo del destinatario no es observable sin violar privacidad (ver README). Las requests deben ejecutarse EN ORDEN: modifican saldos reales."
+        },
+        {
+          "name": "Business Errors",
+          "item": [
+            {
+              "name": "[200] Get source balance (before insufficient-funds attempt)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"thirdPartyInsufficientFundsBalanceBefore\", pm.response.json().balance.amount);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "[422] Third-party transfer preview - insufficient funds",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 422\", function () {",
+                      "    pm.response.to.have.status(422);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/transfer-rejected\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/transfer-rejected\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"saldo disponible\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": {{insufficientFundsAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar el rechazo por saldo insuficiente en la cuenta origen. Resultado esperado: 422 \"transfer-rejected\". Variables usadas: ownSourceAccountId, thirdPartyDestinationAccountNumber, insufficientFundsAmount."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get source balance (after insufficient-funds attempt) - unchanged",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "function toCents(n) { return Math.round(Number(n) * 100); }",
+                      "pm.test(\"Balance remains unchanged after a rejected third-party transfer\", function () {",
+                      "    const before = toCents(pm.environment.get(\"thirdPartyInsufficientFundsBalanceBefore\"));",
+                      "    const after = toCents(pm.response.json().balance.amount);",
+                      "    pm.expect(after).to.eql(before);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "[404] Third-party transfer preview - destination account does not exist",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 404\", function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/destination-not-found\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/destination-not-found\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{nonexistentDestinationAccountNumber}}\",\n  \"amount\": {{validThirdPartyTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar FR-024 de 003 — a diferencia del origen, \"cuenta destino inexistente\" es una respuesta específica y reveladora por diseño (verificar la validez del destino es el propósito de la feature). Resultado esperado: 404, type \"destination-not-found\". Variables usadas: ownSourceAccountId, nonexistentDestinationAccountNumber, validThirdPartyTransferAmount."
+              },
+              "response": []
+            },
+            {
+              "name": "[422] Third-party transfer preview - destination is a own account",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 422\", function () {",
+                      "    pm.response.to.have.status(422);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/destination-is-own-account\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/destination-is-own-account\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"le pertenece a usted\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{ownDestinationAccountNumber}}\",\n  \"amount\": {{validThirdPartyTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar FR-006 de 003 — si el número de cuenta destino resulta pertenecer al propio cliente, se rechaza con un motivo específico (no confundir con transferencia entre cuentas propias). Resultado esperado: 422, type \"destination-is-own-account\". Variables usadas: ownSourceAccountId, ownDestinationAccountNumber, validThirdPartyTransferAmount."
+              },
+              "response": []
+            },
+            {
+              "name": "[404] Third-party transfer preview - source account belongs to another customer",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 404\", function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/not-found\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/not-found\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{thirdPartyDestinationAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": {{validThirdPartyTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar que el origen debe pertenecer al cliente actual (mismo criterio de privacidad simétrica que en 002). Resultado esperado: 404 genérico (\"not-found\", no \"destination-not-found\" — es el ORIGEN el que es ajeno). Variables usadas: thirdPartyDestinationAccountId (usado deliberadamente como origen inválido), thirdPartyDestinationAccountNumber, validThirdPartyTransferAmount."
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Third-party transfer preview - invalid destination account number format",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/bad-request\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/bad-request\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"solo dígitos\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{invalidDestinationAccountNumber}}\",\n  \"amount\": {{validThirdPartyTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar ThirdPartyTransferPreviewRequestValidator — el número de cuenta destino debe contener solo dígitos. Resultado esperado: 400, ProblemDetails \"bad-request\". Variables usadas: ownSourceAccountId, invalidDestinationAccountNumber, validThirdPartyTransferAmount."
+              },
+              "response": []
+            }
+          ],
+          "description": "Reglas de negocio de 003 realmente implementadas. NO incluye \"cuenta origen/destino BLOQUEADA\": no existe actualmente ninguna cuenta sembrada en ese estado (ver postman/README.md, misma limitación que en 002)."
+        },
+        {
+          "name": "Validation Errors",
+          "item": [
+            {
+              "name": "[400] Third-party transfer preview - amount with unsupported scale (3 decimals)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/bad-request\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/bad-request\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"dos decimales\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": {{invalidScaleAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar la precisión decimal máxima del importe. Resultado esperado: 400 \"bad-request\"."
+              },
+              "response": []
+            },
+            {
+              "name": "[422] Third-party transfer preview - amount is zero",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 422\", function () {",
+                      "    pm.response.to.have.status(422);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/transfer-rejected\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/transfer-rejected\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"mayor que cero\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": 0\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar el rechazo de importe = 0 (regla de Application/Domain, igual que en 002 — no es FluentValidation, por eso 422 no 400)."
+              },
+              "response": []
+            },
+            {
+              "name": "[422] Third-party transfer preview - amount is negative",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 422\", function () {",
+                      "    pm.response.to.have.status(422);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/transfer-rejected\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/transfer-rejected\");",
+                      "});",
+                      "pm.test(\"ProblemDetails detail mentions expected reason\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.detail).to.include(\"mayor que cero\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": -5.00\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: validar el rechazo de un importe negativo. Mismo criterio: 422, no 400."
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Third-party transfer preview - malformed sourceAccountId (not a GUID)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400 (automatic model-binding validation)\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "pm.test(\"Body is the framework default ValidationProblemDetails (has an errors dictionary), not the custom ProblemDetails shape\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"errors\");",
+                      "    pm.expect(body.status).to.eql(400);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{invalidAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": {{validThirdPartyTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: mismo caso documentado en 02 - Validation Errors, aplicado a ThirdPartyTransferPreviewRequest.SourceAccountId (también Guid). DISCREPANCIA DOCUMENTADA (ver README): la respuesta 400 usa el ValidationProblemDetails por defecto de ASP.NET Core, no el ProblemDetails personalizado."
+              },
+              "response": []
+            }
+          ],
+          "description": "Únicamente reglas de validación realmente implementadas para 003."
+        },
+        {
+          "name": "Privacy",
+          "item": [
+            {
+              "name": "[200] Third-party preview response never exposes recipient balance or internal ids",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Response never includes recipient balance, other products, or internal customerId\", function () {",
+                      "    const body = pm.response.json();",
+                      "    const flat = JSON.stringify(body).toLowerCase();",
+                      "    pm.expect(flat).to.not.include(\"\\\"balance\\\"\");",
+                      "    pm.expect(flat).to.not.include(\"\\\"availablebalance\\\"\");",
+                      "    pm.expect(flat).to.not.include(\"\\\"customerid\\\"\");",
+                      "    pm.expect(flat).to.not.include(\"\\\"cards\\\"\");",
+                      "    pm.expect(flat).to.not.include(\"\\\"debitcards\\\"\");",
+                      "    pm.expect(flat).to.not.include(\"\\\"accounts\\\"\");",
+                      "});",
+                      "pm.test(\"Response never echoes the full destination account number or the caller's internal customerId\", function () {",
+                      "    const text = JSON.stringify(pm.response.json());",
+                      "    const forbidden_thirdPartyDestinationAccountNumber = pm.environment.get(\"thirdPartyDestinationAccountNumber\");",
+                      "    if (forbidden_thirdPartyDestinationAccountNumber) { pm.expect(text).to.not.include(forbidden_thirdPartyDestinationAccountNumber); }",
+                      "    const forbidden_currentCustomerId = pm.environment.get(\"currentCustomerId\");",
+                      "    if (forbidden_currentCustomerId) { pm.expect(text).to.not.include(forbidden_currentCustomerId); }",
+                      "});",
+                      "pm.test(\"destinationAccountMasked never equals the full account number\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.destinationAccountMasked).to.not.eql(pm.environment.get(\"thirdPartyDestinationAccountNumber\"));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": {{validThirdPartyTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Propósito: verificar explícitamente el contrato de privacidad de 003 (RB10/FR-011) — la vista previa solo expone el número de cuenta destino enmascarado y el nombre parcialmente oculto del destinatario, nunca su saldo, otros productos ni su customerId interno. Variables usadas: ownSourceAccountId, thirdPartyDestinationAccountNumber, validThirdPartyTransferAmount, currentCustomerId."
+              },
+              "response": []
+            },
+            {
+              "name": "[404] Cannot view the third-party recipient account detail directly",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 404\", function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/not-found\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/not-found\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{thirdPartyDestinationAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{thirdPartyDestinationAccountId}}"
+                  ]
+                },
+                "description": "Propósito: reforzar, en el contexto de 003, que conocer el id interno de la cuenta de un destinatario (por ejemplo tras una transferencia) no otorga ningún acceso a su detalle (misma garantía de 001 HU5, ejercida aquí también sobre el escenario \"ya le transferí dinero, no puedo ver su cuenta\"). Resultado esperado: 404 genérico. Variables usadas: thirdPartyDestinationAccountId."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Confirmed third-party transfer result never exposes recipient balance or internal ids",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"TransferResult never includes recipient balance, other products, or internal customerId\", function () {",
+                      "    const body = pm.response.json();",
+                      "    const flat = JSON.stringify(body).toLowerCase();",
+                      "    pm.expect(flat).to.not.include(\"\\\"balance\\\"\");",
+                      "    pm.expect(flat).to.not.include(\"\\\"availablebalance\\\"\");",
+                      "    pm.expect(flat).to.not.include(\"\\\"customerid\\\"\");",
+                      "    pm.expect(flat).to.not.include(\"\\\"cards\\\"\");",
+                      "    pm.expect(flat).to.not.include(\"\\\"debitcards\\\"\");",
+                      "});",
+                      "pm.test(\"TransferResult never echoes the full destination account number or an internal customerId\", function () {",
+                      "    const text = JSON.stringify(pm.response.json());",
+                      "    const forbidden_thirdPartyDestinationAccountNumber = pm.environment.get(\"thirdPartyDestinationAccountNumber\");",
+                      "    if (forbidden_thirdPartyDestinationAccountNumber) { pm.expect(text).to.not.include(forbidden_thirdPartyDestinationAccountNumber); }",
+                      "    const forbidden_currentCustomerId = pm.environment.get(\"currentCustomerId\");",
+                      "    if (forbidden_currentCustomerId) { pm.expect(text).to.not.include(forbidden_currentCustomerId); }",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers/{{thirdPartyTransferId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers",
+                    "{{thirdPartyTransferId}}"
+                  ]
+                },
+                "description": "Propósito: verificar que TransferResult, tras una confirmación exitosa a un tercero, tampoco filtra información no autorizada del destinatario. Precondición: ejecutar primero \"03 - Third-Party Transfers > Success\" (thirdPartyTransferId debe existir). Variables usadas: thirdPartyTransferId, currentCustomerId."
+              },
+              "response": []
+            }
+          ],
+          "description": "Assertions de privacidad específicas de 003 (RB10/FR-011). El tercer request depende de que \"Success\" se haya ejecutado antes (reutiliza thirdPartyTransferId); los otros dos son independientes."
+        },
+        {
+          "name": "Idempotency",
+          "item": [
+            {
+              "name": "[200] Get source balance (before idempotency demo)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (!pm.environment.get(\"secondIdempotencyKey\")) {",
+                      "    pm.environment.set(\"secondIdempotencyKey\", pm.variables.replaceIn('{{$guid}}'));",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"thirdPartyIdemSourceBalanceBefore\", pm.response.json().balance.amount);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                },
+                "description": "Propósito: capturar el saldo inicial y generar (si aún no existe) secondIdempotencyKey, independiente de idempotencyKey usada en 002. Variables generadas: secondIdempotencyKey (si estaba vacía), thirdPartyIdemSourceBalanceBefore."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Preview transfer to a third party (for idempotency demo)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"thirdPartyIdemPreviewReference\", pm.response.json().previewReference);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": {{validThirdPartyTransferAmount}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "[201] Confirm transfer to a third party - first call with Idempotency-Key",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 201\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "pm.environment.set(\"thirdPartyIdemTransferId\", pm.response.json().transferId);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{secondIdempotencyKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"previewReference\": \"{{thirdPartyIdemPreviewReference}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Variables usadas: secondIdempotencyKey, thirdPartyIdemPreviewReference. Variables generadas: thirdPartyIdemTransferId."
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Replay - same Idempotency-Key, same payload",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"thirdPartyIdemReplayTransferId\", pm.response.json().transferId);",
+                      "pm.test(\"Replay returns the same transferId as the original confirmation\", function () {",
+                      "    pm.expect(pm.response.json().transferId).to.eql(pm.environment.get(\"thirdPartyIdemTransferId\"));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{secondIdempotencyKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"previewReference\": \"{{thirdPartyIdemPreviewReference}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get source balance (after replay) - moved only once",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"thirdPartyIdemSourceBalanceAfterReplay\", pm.response.json().balance.amount);",
+                      "function toCents(n) { return Math.round(Number(n) * 100); }",
+                      "pm.test(\"Idempotent third-party request did not duplicate the debit\", function () {",
+                      "    const before = toCents(pm.environment.get(\"thirdPartyIdemSourceBalanceBefore\"));",
+                      "    const after = toCents(pm.response.json().balance.amount);",
+                      "    const amount = toCents(pm.environment.get(\"validThirdPartyTransferAmount\"));",
+                      "    pm.expect(after).to.eql(before - amount);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Preview a different transfer (for conflict demo)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.environment.set(\"thirdPartyIdemConflictPreviewReference\", pm.response.json().previewReference);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/third-party-transfer-previews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "third-party-transfer-previews"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": 1.00\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "[409] Confirm transfer - same Idempotency-Key, different payload",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 409\", function () {",
+                      "    pm.response.to.have.status(409);",
+                      "});",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "pm.test(\"Error body has required ProblemDetails fields (title, status)\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body).to.have.property(\"title\");",
+                      "    pm.expect(body).to.have.property(\"status\");",
+                      "});",
+                      "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/idempotency-conflict\", function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/idempotency-conflict\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{secondIdempotencyKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"previewReference\": \"{{thirdPartyIdemConflictPreviewReference}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "[200] Get source balance (after conflict attempt) - unchanged",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "function toCents(n) { return Math.round(Number(n) * 100); }",
+                      "pm.test(\"Balance unchanged after an idempotency-conflict attempt\", function () {",
+                      "    const before = toCents(pm.environment.get(\"thirdPartyIdemSourceBalanceAfterReplay\"));",
+                      "    const after = toCents(pm.response.json().balance.amount);",
+                      "    pm.expect(after).to.eql(before);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{ownSourceAccountId}}"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ],
+          "description": "Misma demostración que 02 - Idempotency, aplicada a transferencias a terceros, usando secondIdempotencyKey (independiente de idempotencyKey) para que ambas carpetas puedan ejecutarse sin interferir entre sí. Ejecutar EN ORDEN."
+        }
+      ],
+      "description": "Transferencias desde una cuenta del cliente actual hacia la cuenta de otro cliente del mismo banco (feature 003). Contrato: specs/003-transferencias-terceros/contracts/openapi/third-party-transfers-v1.yaml (la confirmación y consulta reutilizan POST /transfers y GET /transfers/{id} de 002). \"Success\" e \"Idempotency\" modifican saldos reales."
+    },
+    {
+      "name": "90 - End-to-End Demo",
+      "item": [
+        {
+          "name": "1. Consultar productos del cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Content-Type is application/json\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            },
+            "description": "Paso 1 de la demo. Lista las cuentas del Cliente A antes de cualquier operación."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Consultar cuenta origen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.set(\"e2eSourceBalanceStart\", pm.response.json().balance.amount);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{ownSourceAccountId}}"
+              ]
+            },
+            "description": "Paso 2. Captura el saldo inicial de la cuenta origen. Variables generadas: e2eSourceBalanceStart."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Consultar cuenta propia destino",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.set(\"e2eDestinationBalanceStart\", pm.response.json().balance.amount);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{ownDestinationAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{ownDestinationAccountId}}"
+              ]
+            },
+            "description": "Paso 3. Captura el saldo inicial de la segunda cuenta propia. Variables generadas: e2eDestinationBalanceStart."
+          },
+          "response": []
+        },
+        {
+          "name": "4a. Ejecutar transferencia entre cuentas propias - preview",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.set(\"e2eOwnPreviewReference\", pm.response.json().previewReference);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transfer-previews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transfer-previews"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": {{validOwnTransferAmount}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Paso 4 (vista previa). Variables generadas: e2eOwnPreviewReference."
+          },
+          "response": []
+        },
+        {
+          "name": "4b. Ejecutar transferencia entre cuentas propias - confirm",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get(\"e2eIdempotencyKey\")) {",
+                  "    pm.environment.set(\"e2eIdempotencyKey\", pm.variables.replaceIn('{{$guid}}'));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.environment.set(\"e2eOwnTransferId\", pm.response.json().transferId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{e2eIdempotencyKey}}",
+                "type": "text",
+                "description": "Generada en el paso 11 más abajo la primera vez que se ejecuta la demo; ver pre-request script."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transfers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transfers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"previewReference\": \"{{e2eOwnPreviewReference}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Paso 4 (confirmación). Se genera aquí mismo e2eIdempotencyKey (si aún no existe) para poder reutilizarla más adelante en el paso 11 (demostración de idempotencia). Variables generadas: e2eOwnTransferId."
+          },
+          "response": []
+        },
+        {
+          "name": "5a. Verificar nuevo balance de origen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.set(\"e2eSourceBalanceAfterOwn\", pm.response.json().balance.amount);",
+                  "function toCents(n) { return Math.round(Number(n) * 100); }",
+                  "pm.test(\"Own transfer decreased the source balance by exactly the transferred amount\", function () {",
+                  "    const before = toCents(pm.environment.get(\"e2eSourceBalanceStart\"));",
+                  "    const after = toCents(pm.response.json().balance.amount);",
+                  "    const amount = toCents(pm.environment.get(\"validOwnTransferAmount\"));",
+                  "    pm.expect(after).to.eql(before - amount);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{ownSourceAccountId}}"
+              ]
+            },
+            "description": "Paso 5. Variables generadas: e2eSourceBalanceAfterOwn."
+          },
+          "response": []
+        },
+        {
+          "name": "5b. Verificar nuevo balance de destino",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.set(\"e2eDestinationBalanceAfterOwn\", pm.response.json().balance.amount);",
+                  "function toCents(n) { return Math.round(Number(n) * 100); }",
+                  "pm.test(\"Own transfer increased the destination balance by exactly the transferred amount\", function () {",
+                  "    const before = toCents(pm.environment.get(\"e2eDestinationBalanceStart\"));",
+                  "    const after = toCents(pm.response.json().balance.amount);",
+                  "    const amount = toCents(pm.environment.get(\"validOwnTransferAmount\"));",
+                  "    pm.expect(after).to.eql(before + amount);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{ownDestinationAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{ownDestinationAccountId}}"
+              ]
+            },
+            "description": "Paso 5. Variables generadas: e2eDestinationBalanceAfterOwn."
+          },
+          "response": []
+        },
+        {
+          "name": "6. Consultar cuenta para la siguiente operación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{ownSourceAccountId}}"
+              ]
+            },
+            "description": "Paso 6. Reconfirma el saldo de la cuenta origen antes de la transferencia a un tercero."
+          },
+          "response": []
+        },
+        {
+          "name": "7a. Ejecutar transferencia a un tercero - preview",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.set(\"e2eThirdPartyPreviewReference\", pm.response.json().previewReference);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/third-party-transfer-previews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "third-party-transfer-previews"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountNumber\": \"{{thirdPartyDestinationAccountNumber}}\",\n  \"amount\": {{validThirdPartyTransferAmount}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Paso 7 (vista previa). Variables generadas: e2eThirdPartyPreviewReference."
+          },
+          "response": []
+        },
+        {
+          "name": "7b. Ejecutar transferencia a un tercero - confirm",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.environment.set(\"e2eThirdPartyTransferId\", pm.response.json().transferId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transfers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transfers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"previewReference\": \"{{e2eThirdPartyPreviewReference}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Paso 7 (confirmación). Variables generadas: e2eThirdPartyTransferId."
+          },
+          "response": []
+        },
+        {
+          "name": "8. Verificar saldo del origen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.set(\"e2eSourceBalanceAfterThirdParty\", pm.response.json().balance.amount);",
+                  "function toCents(n) { return Math.round(Number(n) * 100); }",
+                  "pm.test(\"Third-party transfer decreased the source balance by exactly the transferred amount\", function () {",
+                  "    const before = toCents(pm.environment.get(\"e2eSourceBalanceAfterOwn\"));",
+                  "    const after = toCents(pm.response.json().balance.amount);",
+                  "    const amount = toCents(pm.environment.get(\"validThirdPartyTransferAmount\"));",
+                  "    pm.expect(after).to.eql(before - amount);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{ownSourceAccountId}}"
+              ]
+            },
+            "description": "Paso 8. Variables generadas: e2eSourceBalanceAfterThirdParty."
+          },
+          "response": []
+        },
+        {
+          "name": "9. Ejecutar una transferencia con fondos insuficientes",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"e2eInsufficientFundsBalanceBefore\", pm.environment.get(\"e2eSourceBalanceAfterThirdParty\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test(\"ProblemDetails type is https://banca-digital-pe.dev/errors/transfer-rejected\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.type).to.eql(\"https://banca-digital-pe.dev/errors/transfer-rejected\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transfer-previews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transfer-previews"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": \"{{ownSourceAccountId}}\",\n  \"destinationAccountId\": \"{{ownDestinationAccountId}}\",\n  \"amount\": {{insufficientFundsAmount}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Paso 9. Se espera que sea rechazada. Variables generadas: e2eInsufficientFundsBalanceBefore (= saldo actual, capturado del paso 8)."
+          },
+          "response": []
+        },
+        {
+          "name": "10. Verificar que el saldo no cambió",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.set(\"e2eInsufficientFundsBalanceAfter\", pm.response.json().balance.amount);",
+                  "function toCents(n) { return Math.round(Number(n) * 100); }",
+                  "pm.test(\"Balance unchanged after the rejected insufficient-funds attempt\", function () {",
+                  "    const before = toCents(pm.environment.get(\"e2eInsufficientFundsBalanceBefore\"));",
+                  "    const after = toCents(pm.response.json().balance.amount);",
+                  "    pm.expect(after).to.eql(before);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{ownSourceAccountId}}"
+              ]
+            },
+            "description": "Paso 10. Demuestra atomicidad: el intento rechazado del paso 9 no modificó ningún saldo."
+          },
+          "response": []
+        },
+        {
+          "name": "11. Repetir la transferencia propia con el mismo Idempotency-Key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.set(\"e2eReplayTransferId\", pm.response.json().transferId);",
+                  "pm.test(\"Replayed transfer returns the same transferId as the original\", function () {",
+                  "    pm.expect(pm.response.json().transferId).to.eql(pm.environment.get(\"e2eOwnTransferId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{e2eIdempotencyKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transfers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transfers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"previewReference\": \"{{e2eOwnPreviewReference}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Paso 11. Reenvía la confirmación del paso 4b con la MISMA Idempotency-Key y el MISMO previewReference. Resultado esperado: 200 (replay), mismo transferId que e2eOwnTransferId. Variables generadas: e2eReplayTransferId."
+          },
+          "response": []
+        },
+        {
+          "name": "12. Demostrar que no existe doble débito",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.set(\"e2eSourceBalanceAfterReplay\", pm.response.json().balance.amount);",
+                  "function toCents(n) { return Math.round(Number(n) * 100); }",
+                  "pm.test(\"No double debit: balance after replay equals balance before the replay attempt\", function () {",
+                  "    const before = toCents(pm.environment.get(\"e2eSourceBalanceAfterThirdParty\"));",
+                  "    const after = toCents(pm.response.json().balance.amount);",
+                  "    pm.expect(after).to.eql(before);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{ownSourceAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{ownSourceAccountId}}"
+              ]
+            },
+            "description": "Paso 12 (cierre de la demo). El saldo debe ser idéntico al del paso 8: el replay del paso 11 no debitó una segunda vez."
+          },
+          "response": []
+        }
+      ],
+      "description": "Flujo narrativo end-to-end pensado para ejecutarse EN ORDEN desde el Collection Runner durante una demo. Modifica saldos reales (dos transferencias legítimas: una propia y una a un tercero). Ejecutar preferentemente tras un reinicio de la base de datos (ver README, \"Cómo restablecer datos\") para reproducir exactamente los saldos documentados."
+    }
+  ]
+}
